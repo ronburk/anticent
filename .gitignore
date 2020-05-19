@@ -1,0 +1,9 @@
+node_modules
+*~
+*.db
+null
+anticent.db-journal
+test
+types
+.eslintrc.json
+a.out
