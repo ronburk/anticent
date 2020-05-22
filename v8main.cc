@@ -39,13 +39,22 @@ void V8Main(int ArgCount, char** Args)
             {
             // Create a string containing the JavaScript source code.
             v8::Local<v8::String> source =
-                v8::String::NewFromUtf8(isolate, "'Hello' + ', World!'",
+                v8::String::NewFromUtf8(isolate, "import * from './main.mjs';",
                     v8::NewStringType::kNormal)
                 .ToLocalChecked();
 
             // Compile the source code.
-            v8::Local<v8::Script> script =
-                v8::Script::Compile(context, source).ToLocalChecked();
+            v8::Local<v8::Script> script;
+            if(v8::Script::Compile(context, source).ToLocal(&script))
+                {
+                printf("compile worked!\n");
+                }
+            else
+                {
+                printf("compile failed!\n");
+                }
+//            v8::MaybeLocal<v8::Script> script =
+//                v8::Script::Compile(context, source);
 
             // Run the script to get the result.
             v8::Local<v8::Value> result = script->Run(context).ToLocalChecked();

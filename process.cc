@@ -9,11 +9,8 @@ to a *nix process, in that it provides context for code when it is running.
 #include "process.h"
 using std::make_shared;
 
-namespace
-    {
-    int                         nextProcId = 0;
-    vector<shared_ptr<Process>> procList(10);
-    }
+int                         nextProcId = 0;
+vector<shared_ptr<Process>> procList(10);
 
 
 Process::Process(int uid, int layer, std::string cwd, int parentProcID)
