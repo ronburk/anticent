@@ -10,9 +10,18 @@
 #include "libplatform/libplatform.h"
 #include "v8.h"
 
+using v8::Context;
 using v8::Local;
 using v8::ScriptOrigin;
 using v8::Isolate;
+using v8::Maybe;
+using v8::MaybeLocal;
+using v8::Module;
+
+static Local<Module> CreateModule()
+    {
+    
+    }
 
 Local<v8::String> NewV8Str(Isolate* isolate, const char* src)
     {
@@ -30,6 +39,20 @@ ScriptOrigin ModuleOrigin(Local<v8::Value> resource_name, Isolate* isolate) {
                       Local<v8::Boolean>(), True(isolate));
   return origin;
 }
+
+
+/* callback from V8 to load a module. Must return a Local<Module>.
+ */
+MaybeLocal<Module>  ModuleCallback(Local<Context> context,
+    Local<v8::String> specifier,
+    Local<Module> referrer)
+    {
+    v8::String::Utf8Value mystr(Isolate::GetCurrent(), specifier);
+
+    printf("Huzzah: module callback invoked: %s\n", *mystr);
+    return referrer;
+    }
+
 void V8Main(int ArgCount, char** Args)
     {
     // Initialize V8.
@@ -59,7 +82,7 @@ void V8Main(int ArgCount, char** Args)
             {
             // Create a string containing the JavaScript source code.
             Local<v8::String> source =
-                v8::String::NewFromUtf8(isolate, "import './main.mjs';",
+                v8::String::NewFromUtf8(isolate, "import './main.mjs';\n'hello '+'world';",
                     v8::NewStringType::kNormal)
                 .ToLocalChecked();
             Local<v8::String> modname=NewV8Str(isolate, "root_module");
@@ -76,7 +99,18 @@ void V8Main(int ArgCount, char** Args)
                 {
                 printf("compile module failed.\n");
                 }
+            Maybe<bool> status = module->InstantiateModule(context, ModuleCallback);
+            if(status.IsJust())
+                {
+                printf("Module instantiation %s.\n", status.FromJust()?"SUCCESS":"FAILURE");
+                }
+            else if(status.IsNothing())
+                {
+                printf("Module instantiate FAILED with exception.\n");
+                }
+            
 #if 0
+            Handle<v8::Script> script = v8::Script::Compile(source);
             // Compile the source code.
             v8::Local<v8::Script> script;
             if(v8::Script::Compile(context, source).ToLocal(&script))
@@ -87,11 +121,15 @@ void V8Main(int ArgCount, char** Args)
                 {
                 printf("compile failed!\n");
                 }
+#endif
+
+            
+#if 0
 //            v8::MaybeLocal<v8::Script> script =
 //                v8::Script::Compile(context, source);
 
             // Run the script to get the result.
-            v8::Local<v8::Value> result = script->Run(context).ToLocalChecked();
+            v8::Local<v8::Value> result = module->Run(context).ToLocalChecked();
 
             // Convert the result to an UTF8 string and print it.
             v8::String::Utf8Value utf8(isolate, result);
@@ -108,3 +146,4 @@ void V8Main(int ArgCount, char** Args)
     v8::V8::ShutdownPlatform();
     delete create_params.array_buffer_allocator;
     }
+
