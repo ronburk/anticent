@@ -1,4 +1,7 @@
 /* V8Main() - main entry point for the JavaScript environment.
+ *
+ * Simplifying assumptions: Only one Isolate. Only modules, no scripts. No wasm.
+ * ONLYISOLATE is a pointer to ThisIsolate, the only v8::Isolate* that will exist.
  */
 
 #include <stdio.h>
@@ -8,7 +11,7 @@
 #include <cassert>
 
 #include "libplatform/libplatform.h"
-#include "v8.h"
+#include "anti8.h"
 
 using v8::Context;
 using v8::Local;
@@ -17,29 +20,78 @@ using v8::Isolate;
 using v8::Maybe;
 using v8::MaybeLocal;
 using v8::Module;
+using v8::Integer;
+using v8::Boolean;
+using v8::PrimitiveArray;
+using v8::Value;
+using v8::String;
 
+inline Local<Integer> NewV8Int(int val)        { return Integer::New(ONLYISOLATE, val); }
+inline Local<Boolean> NewV8Bool(bool val) { return Boolean::New(ONLYISOLATE, val); }
+inline Local<Value> NewV8Null()                   { return v8::Null(ONLYISOLATE); }
+
+#if 0
 static Local<Module> CreateModule()
     {
     
     }
+#endif
 
-Local<v8::String> NewV8Str(Isolate* isolate, const char* src)
+/* NewV8Str() - convert const char* to Local<v8::String>
+ */
+
+Local<v8::String> NewV8Str(const char* src)
     {
-    Local<v8::String> result =
-        v8::String::NewFromUtf8(isolate, "import * from './main.mjs';",
-            v8::NewStringType::kNormal)
+    auto result =
+        v8::String::NewFromUtf8(ONLYISOLATE, src, v8::NewStringType::kNormal)
         .ToLocalChecked();
     return result;
+        
     }
 
+/* NewScriptOrigin() - create V8 ScriptOrigin from ordinary C++ variables.
+ *
+ * Even though it's calls ScriptOrigin, it serves for both modules and scripts.
+ * Anticent is only using modules, remember.
+ *
+ * V8's idea of "origin" is a "context". Since I don't know what we're doing with
+ * contexts if anything, we'll set that field false.
+ */
+ScriptOrigin NewScriptOrigin(Local<String> modname, int line=0, int col=0, const char* mapurl=nullptr)
+    {
+    Local<v8::String> EmptyString;
+
+    return
+        ScriptOrigin(
+//        Local< Value > resource_name,
+        modname,
+        NewV8Int(line),                 // resource_line_offset
+        NewV8Int(col),                  // resource_column_offset
+        NewV8Bool(false),            // resource_is_shared_cross_origin
+        NewV8Int(0),                    // script_id ???
+        NewV8Null(),                    // source_map_url=Local< Value >(),
+        NewV8Bool(true),            // resource_is_opaque=Local< Boolean >(),
+        NewV8Bool(false),           // is_wasm=Local< Boolean >(),
+        NewV8Bool(true),            // is_module=Local< Boolean >(true),
+//        Local<PrimitiveArray>() //host_defined_options=Local< PrimitiveArray >()
+        PrimitiveArray::New(ONLYISOLATE, 0)
+            );
+    }
+
+
+#if 0
 ScriptOrigin ModuleOrigin(Local<v8::Value> resource_name, Isolate* isolate) {
+    return
+        ScriptOrigin(
+        NewV8Str(
+        );
   ScriptOrigin origin(resource_name, Local<v8::Integer>(), Local<v8::Integer>(),
                       Local<v8::Boolean>(), Local<v8::Integer>(),
                       Local<v8::Value>(), Local<v8::Boolean>(),
                       Local<v8::Boolean>(), True(isolate));
   return origin;
 }
-
+#endif
 
 /* callback from V8 to load a module. Must return a Local<Module>.
  */
@@ -53,6 +105,7 @@ MaybeLocal<Module>  ModuleCallback(Local<Context> context,
     return referrer;
     }
 
+v8::Isolate* ThisIsolate;
 void V8Main(int ArgCount, char** Args)
     {
     // Initialize V8.
@@ -67,31 +120,32 @@ void V8Main(int ArgCount, char** Args)
     v8::Isolate::CreateParams create_params;
     create_params.array_buffer_allocator =
         v8::ArrayBuffer::Allocator::NewDefaultAllocator();
-    v8::Isolate* isolate = v8::Isolate::New(create_params);
+//    v8::Isolate* isolate = v8::Isolate::New(create_params);
+    // Pointer to the only Isolate. Access via macro ONLYISOLATE.
+    ThisIsolate = v8::Isolate::New(create_params);
         {
-        v8::Isolate::Scope isolate_scope(isolate);
+        v8::Isolate::Scope isolate_scope(ONLYISOLATE);
 
         // Create a stack-allocated handle scope.
-        v8::HandleScope handle_scope(isolate);
+        v8::HandleScope handle_scope(ONLYISOLATE);
 
         // Create a new context.
-        Local<v8::Context> context = v8::Context::New(isolate);
+        Local<v8::Context> context = v8::Context::New(ONLYISOLATE);
 
         // Enter the context for compiling and running the hello world script.
         v8::Context::Scope context_scope(context);
             {
             // Create a string containing the JavaScript source code.
-            Local<v8::String> source =
-                v8::String::NewFromUtf8(isolate, "import './main.mjs';\n'hello '+'world';",
-                    v8::NewStringType::kNormal)
-                .ToLocalChecked();
-            Local<v8::String> modname=NewV8Str(isolate, "root_module");
+            Local<v8::String> source = NewV8Str("import './anticent.mjs';\n'hello '+'world';");
+//                .ToLocalChecked();
+            Local<v8::String> modname=NewV8Str("foo.mjs");
             
 
-            ScriptOrigin origin = ModuleOrigin(modname, isolate);
+//            ScriptOrigin origin = ModuleOrigin(modname, isolate);
+            ScriptOrigin origin = NewScriptOrigin(modname);
             v8::ScriptCompiler::Source modsource(source,origin);
             Local<v8::Module> module;
-            if(v8::ScriptCompiler::CompileModule(isolate, &modsource).ToLocal(&module))
+            if(v8::ScriptCompiler::CompileModule(ONLYISOLATE, &modsource).ToLocal(&module))
                 {
                 printf("compile module worked.\n");
                 }
@@ -140,8 +194,8 @@ void V8Main(int ArgCount, char** Args)
         }
 
     // Dispose the isolate and tear down V8. Note that Dispose does a delete this!
-    isolate->Dispose();
-    isolate = nullptr;
+    ThisIsolate->Dispose();
+    ThisIsolate = nullptr;
     v8::V8::Dispose();
     v8::V8::ShutdownPlatform();
     delete create_params.array_buffer_allocator;

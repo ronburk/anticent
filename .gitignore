@@ -1,4 +1,7 @@
 node_modules
+.\#notes.org
+\#*\#
+.emacs.desktop*
 *~
 *.db
 null
