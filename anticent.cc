@@ -5,6 +5,8 @@
 #include <cassert>
 
 #include "anticent.h"
+#include "listener.h"
+#include "poll.h"
 
 int main(int argc, char* argv[])
     {
@@ -21,6 +23,11 @@ int main(int argc, char* argv[])
     free(foo);
     foo[3] = 'a';
 #endif
+    Poll::Init();
+    auto server = Listener::New(8080);
+    Poll::Poll();
     V8Main(argc, argv);
+    delete server;
+//    Poll::Fini();
     return 0;
 }
