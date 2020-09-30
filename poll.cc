@@ -102,13 +102,15 @@ namespace Poll
 // ... do everything until you don't need servinfo anymore ....
 
         }
-    void Poll()
+    /* Poll() - poll for I/O events
+     */
+    void Poll(int milliseconds)
         {
         struct epoll_event events[100];
         int     nSockets;
 
         fprintf(stderr, "epoll_wait\n");
-        nSockets = epoll_wait(epollFd, events, 100, -1);
+        nSockets = epoll_wait(epollFd, events, 100, milliseconds);
         if(nSockets < 0)
             {
             perror("epoll_wait failed");
@@ -126,9 +128,13 @@ namespace Poll
         }
 // implement class Eventable
 
-    Eventable::Eventable(int fd, int eventFlags)
+    Eventable::Eventable() : fd(-1)
         {
-        this->fd    = fd;   // destructor is going to need this.
+        }
+    int Eventable::Add(int fd, int eventFlags)
+        {
+        assert(this->fd == -1);
+
         // we assume everything is edge-triggered
         struct epoll_event event = {eventFlags|EPOLLET, {this}};
         int status = epoll_ctl(epollFd, EPOLL_CTL_ADD, fd, &event);
@@ -137,16 +143,21 @@ namespace Poll
             perror("EPOLL_CTL_ADD failed");
             assert(false);
             }
+        else
+            this->fd    = fd;   // destructor is going to need this.
+        return status;
         }
     Eventable::~Eventable()
         {
-        int status = epoll_ctl(epollFd, EPOLL_CTL_DEL, fd, nullptr);
-        if(status != 0)
+        if(fd >= 0) // if we have a file descriptor in epoll's interest list
             {
-            perror("EPOLL_CTL_DEL failed");
-            assert(false);
+            int status = epoll_ctl(epollFd, EPOLL_CTL_DEL, fd, nullptr);
+            if(status != 0)
+                {
+                perror("EPOLL_CTL_DEL failed");
+                assert(false);
+                }
             }
-        
         }
 
     }

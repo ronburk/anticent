@@ -2,11 +2,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <memory>
+using std::make_unique;
 #include <cassert>
 
 #include "anticent.h"
 #include "listener.h"
 #include "poll.h"
+
+
 
 int main(int argc, char* argv[])
     {
@@ -24,10 +27,15 @@ int main(int argc, char* argv[])
     foo[3] = 'a';
 #endif
     Poll::Init();
-    auto server = Listener::New(8080);
-    Poll::Poll();
+    auto server = make_unique<HttpListener>();
+    // HttpListener server(8080)
+    if(server->Bind("eno1", 8080))
+        {
+        
+        }
+    Poll::Poll(10*1000);
     V8Main(argc, argv);
-    delete server;
+//    delete server;
 //    Poll::Fini();
     return 0;
 }

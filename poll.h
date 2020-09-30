@@ -3,36 +3,23 @@
 
 #include <sys/epoll.h>
 
-/*
-Add(myfd, mydataptr, mycallback)
-mycallback(mydataptr, myfd, eventmask)
-
-
- */
+using fd_t = int;     // define an alias to remind ourselves which int's are really file descriptors
 
 namespace Poll
     {
     void    Init();
-    void    Poll();
+    void    Poll(int milliseconds);
 
     class   Eventable
         {
     public:
-        int fd;
-        Eventable(int fd, int eventFlags);
+        fd_t     fd = -1;     // -1 indicates no longer in use
+        Eventable();
+        int Add(fd_t fd, int eventFlags);
         virtual ~Eventable();
         virtual void Event(int event) = 0;
         };
     }
 
-
-#if 0
-class EPollSource
-    {
-public:
-    EPollSource(int fd);
-    
-    };
-#endif
 
 #endif /* POLL_H_ */
