@@ -1,5 +1,5 @@
 #include "poll.h"
-
+#include <unistd.h>
 #include <sys/epoll.h>
 #include <cassert>
 #include <cstdio>
@@ -85,11 +85,10 @@ job::
 
 namespace Poll
     {
-    int                         epollFd;
+    fd_t    epollFd;
 
     void Init()
         {
-
         epollFd = epoll_create(1);      // argument is essentially dummy that must be > 0
         if(epollFd < 0)
             {
@@ -158,6 +157,7 @@ namespace Poll
                 assert(false);
                 }
             }
+        close(fd);
+        fd = -1;
         }
-
     }

@@ -3,7 +3,8 @@
 
 #include <sys/epoll.h>
 
-using fd_t = int;     // define an alias to remind ourselves which int's are really file descriptors
+using fd_t = int;  // alias to remind ourselves which int's are really file descriptors
+
 
 namespace Poll
     {
