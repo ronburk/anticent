@@ -5,22 +5,17 @@
 
 using fd_t = int;  // alias to remind ourselves which int's are really file descriptors
 
-
-namespace Poll
+class   Eventable
     {
-    void    Init();
-    void    Poll(int milliseconds);
+public:
+    static int  Poll(int milliseconds);
 
-    class   Eventable
-        {
-    public:
-        fd_t     fd = -1;     // -1 indicates no longer in use
-        Eventable();
-        int Add(fd_t fd, int eventFlags);
-        virtual ~Eventable();
-        virtual void Event(int event) = 0;
-        };
-    }
-
+    fd_t     fd = -1;     // -1 indicates no longer in epoll's interest list
+    Eventable();
+    int     Add(fd_t fd, int eventFlags);
+    fd_t    Del();
+    virtual ~Eventable();
+    virtual void Event(int event) = 0;
+    };
 
 #endif /* POLL_H_ */

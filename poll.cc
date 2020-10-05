@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include "signals.h"
 
 /* DumpEvent() - little debugging code to symbolically dump I/O events.
  */
@@ -38,6 +39,7 @@ void    DumpEvent(int event)
                 if(output[0] != '\0')
                     strcat(output, "|");
                 strcat(output, EventNames[iEvent].Name);
+                break;
                 }
             }
         if(iEvent >= nEventNames && (event&iVal) != 0)
@@ -49,7 +51,6 @@ void    DumpEvent(int event)
         }
     fprintf(stderr, "%s\n", output);
     }
-
 
 
 /*
@@ -73,8 +74,6 @@ forever()
     repeat do DB writes until no work to do
     repeat do DB reads until no work to do
     run V8 to completion
-    
-    
     }
 
 job::
@@ -83,81 +82,107 @@ job::
 
  */
 
-namespace Poll
+
+int     nSockets = 0;
+fd_t    epollFd;
+int Init()
     {
-    fd_t    epollFd;
-
-    void Init()
+    fd_t result = epoll_create(1);
+    if(result < 0)
         {
-        epollFd = epoll_create(1);      // argument is essentially dummy that must be > 0
-        if(epollFd < 0)
-            {
-            perror("epoll_create() failed");
-            assert(false);
-            }
-
-
-
-// ... do everything until you don't need servinfo anymore ....
-
+        perror("epoll_create() failed");
+        assert(false);
         }
-    /* Poll() - poll for I/O events
-     */
-    void Poll(int milliseconds)
+    fprintf(stderr, "Poll::Init()\n");
+    epollFd = result;
+    new Signals();
+
+    return result;
+    }
+int foo = Init(); // ??? so tacky
+
+/* Poll() - poll for I/O events
+ */
+int  Eventable::Poll(int milliseconds)
+    {
+    struct epoll_event events[100];
+    int     nAwake;
+
+    fprintf(stderr, "epoll_wait(%d)\n", milliseconds);
+    nAwake = epoll_wait(epollFd, events, 100, milliseconds);
+//        fprintf(stderr, "signalNum = %d\n", signalNum);
+    if(nAwake < 0)
         {
-        struct epoll_event events[100];
-        int     nSockets;
-
-        fprintf(stderr, "epoll_wait\n");
-        nSockets = epoll_wait(epollFd, events, 100, milliseconds);
-        if(nSockets < 0)
-            {
-            perror("epoll_wait failed");
-            assert(false);
-            }
-        for(int iSocket=0; iSocket < nSockets; ++iSocket)
-            {
-            DumpEvent(events[iSocket].events);
-            static_cast<Poll::Eventable*>(events[iSocket].data.ptr) ->Event(events[iSocket].events);
-            }
-        fprintf(stderr, "epoll_wait got %d sockets\n", nSockets);
+        perror("epoll_wait failed");
+        assert(false);
         }
-    void Fini()
+    for(int iSocket=0; iSocket < nAwake; ++iSocket)
         {
+        DumpEvent(events[iSocket].events);
+        static_cast<Eventable*>(events[iSocket].data.ptr)
+            ->Event(events[iSocket].events);
         }
+    fprintf(stderr, "epoll_wait got %d/%d sockets\n", nAwake, nSockets);
+    return nSockets;
+    }
+void Fini()
+    {
+    }
 // implement class Eventable
 
-    Eventable::Eventable() : fd(-1)
-        {
-        }
-    int Eventable::Add(int fd, int eventFlags)
-        {
-        assert(this->fd == -1);
+Eventable::Eventable() : fd(-1)
+    {
+    }
+int Eventable::Add(int fd, int eventFlags)
+    {
+    assert(this->fd == -1);  // this object can't have two active descriptors
 
-        // we assume everything is edge-triggered
-        struct epoll_event event = {eventFlags|EPOLLET, {this}};
-        int status = epoll_ctl(epollFd, EPOLL_CTL_ADD, fd, &event);
+    fprintf(stderr, "Eventable::Add(fd=%d, 0x%08X)\n", fd, eventFlags);
+    // we assume everything is edge-triggered
+    struct epoll_event event = {eventFlags|EPOLLET, {this}};
+    int status = epoll_ctl(epollFd, EPOLL_CTL_ADD, fd, &event);
+    if(status != 0)
+        {
+        perror("EPOLL_CTL_ADD failed");
+        assert(false);
+        }
+    else
+        {
+        this->fd    = fd;   // destructor is going to need this.
+        ++nSockets;
+        }
+    return status;
+    }
+fd_t Eventable::Del()
+    {
+    assert(this->fd != -1);
+
+    int status = epoll_ctl(epollFd, EPOLL_CTL_DEL, fd, nullptr);
+    if(status != 0)
+        {
+        perror("EPOLL_CTL_DEL failed");
+        assert(false);
+        }
+    else
+        {
+        this->fd    = -1;
+        --nSockets;
+        }
+    return this->fd;
+    }
+Eventable::~Eventable()
+    {
+    if(fd >= 0) // if we have a file descriptor in epoll's interest list
+        {
+        int status = epoll_ctl(epollFd, EPOLL_CTL_DEL, fd, nullptr);
         if(status != 0)
             {
-            perror("EPOLL_CTL_ADD failed");
+            perror("EPOLL_CTL_DEL failed");
             assert(false);
             }
-        else
-            this->fd    = fd;   // destructor is going to need this.
-        return status;
+        --nSockets;
         }
-    Eventable::~Eventable()
-        {
-        if(fd >= 0) // if we have a file descriptor in epoll's interest list
-            {
-            int status = epoll_ctl(epollFd, EPOLL_CTL_DEL, fd, nullptr);
-            if(status != 0)
-                {
-                perror("EPOLL_CTL_DEL failed");
-                assert(false);
-                }
-            }
-        close(fd);
-        fd = -1;
-        }
+    close(fd);
+    fd = -1;
     }
+

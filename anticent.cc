@@ -11,14 +11,11 @@ using std::make_unique;
 
 
 
+
 int main(int argc, char* argv[])
     {
-    Poll::Init();
-    auto server = make_unique<HttpListener>();
-    server->Listen("eno1", 8080);
-    Poll::Poll(10*1000);
+    HttpListener::New("eno1", 8080);
     V8Main(argc, argv);
-//    delete server;
-//    Poll::Fini();
+    Job::Scheduler();
     return 0;
-}
+    }

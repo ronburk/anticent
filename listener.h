@@ -3,11 +3,11 @@
 
 #include <string>
 #include "poll.h"
-#include "schedule.h"
+#include "job.h"
 using std::string;
 
 
-class   Listener : public Poll::Eventable, Runnable
+class   Listener : public Eventable, public Job
     {
     string  name;
     int     port = -1;
@@ -21,8 +21,10 @@ public:
 
 class HttpListener : public Listener
     {
-public:
     HttpListener(){}
+public:
+    static void Shutdown();
+    static void New(string nicname, int port, bool IP6=false);
     virtual void Event(int event);
     };
 

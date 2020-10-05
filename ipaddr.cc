@@ -38,6 +38,8 @@ fd_t IPaddr::Accept(fd_t listenFd)
 
     socklen_t size = newAddr;
     result = accept4(listenFd, newAddr, &size, SOCK_NONBLOCK);
+    // ??? handle EAGAIN, EWOULDBLOCK, ECONNABORTED, EINTR, etc.
+    
     DieIf(result < 0, "accept4");
     return result;
     }
