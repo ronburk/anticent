@@ -2,6 +2,8 @@
 #include <cstdio>
 #include <unistd.h> // read, write
 #include <errno.h>
+#include <cassert>
+#include <sys/socket.h>
 
 /* HTTP lifetimes: a bit complex.
  * ==============================
@@ -48,8 +50,15 @@ ssize_t HttpConn::Read(void* buffer, size_t count)
 
     result  = read(Eventable::fd, buffer, count);
     fprintf(stderr, "HttpConn::Read(%zu) = %ld\n", count, result);
+    // if client has closed their write side
+    if(result == 0)
+        {
+        fprintf(stderr, "HttpConn::Read(): client closed our input\n");
+        shutdown(Eventable::fd, SHUT_RD);
+        }
     return result;
     }
+
 ssize_t HttpConn::Write(void* buffer, size_t count)
     {
     ssize_t result;

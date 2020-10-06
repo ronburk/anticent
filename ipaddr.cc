@@ -119,11 +119,15 @@ string mygetname(const struct sockaddr* addr, int flags)
 
 fd_t IPaddr::Bind(const string& nicname, int port)
     {
+    int status;
     SetAddrFromEth(nicname);
     fd_t listenFd = socket(GetFamily(), SOCK_STREAM|SOCK_NONBLOCK, 0);
     DieIf(listenFd < 0, "socket");
+    int   flag = 1;
+    status = setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag));
+    DieIf(status != 0, "setsockopt(SO_REUSEADDR)");
     SetPort(port);
-    int status = bind(listenFd, *this, *this); // conv operators know what to do
+    status = bind(listenFd, *this, *this); // conv operators know what to do
     DieIf(status != 0, "bind");
     status = listen(listenFd, 100);
     DieIf(status != 0, "listen");

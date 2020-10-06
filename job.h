@@ -1,6 +1,34 @@
 #ifndef JOB_H_
 #define JOB_H_
 
+enum JobPriority : unsigned short
+    {
+    PRI_HIGHEST     = 0,
+    PRI_HIGH        = 1,
+    PRI_LOW         = 2,
+    PRI_COUNT       = 3
+    };
+
+class   Job2
+    {
+    JobPriority priority;
+    bool        blocked;
+    Job2*       previous;
+    Job2*       next;
+    Job2*       parent;
+public:
+    Job2(JobPriority priority=PRI_LOW, Job2* parent=nullptr);
+    JobPriority SetPriority(JobPriority);
+    bool        IsBlocked() { return blocked; }
+    void        Block();
+    virtual ~Job2();
+protected:
+    virtual void Run();
+    virtual void ChildDied(Job* Child);
+    };
+
+
+
 class Job;
 
 class JobList
@@ -16,19 +44,20 @@ public:
 
 class Job
     {
-    enum
-        {
-        PRI_SIGNAL      = 0,
-        PRI_HIGH        = 1,
-        PRI_LOW         = 2,
-        PRI_COUNT       = 3
-        };
     friend class JobList;
-    static JobList  Ready[PRI_COUNT];
+    static JobList  Ready[];
 
     Job*        next;
     int         priority;
 public:
+    enum
+        {
+        PRI_HIGHEST     = 0,
+        PRI_HIGH        = 1,
+        PRI_LOW         = 2,
+        PRI_COUNT       = 3
+        };
+
     static void     Scheduler();
     static void     Shutdown();
 

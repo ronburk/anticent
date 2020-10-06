@@ -53,6 +53,7 @@ static HttpListener* This;
 void HttpListener::Shutdown()
     {
     fd_t socket = This->Del();
+    fprintf(stderr, "HttpListener::Shutdown() closing socket\n");
     close(socket);
     }
 

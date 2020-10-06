@@ -127,6 +127,7 @@ int  Eventable::Poll(int milliseconds)
     }
 void Fini()
     {
+    //    close epoll socket, delete Signals, etc. Who calls us ???
     }
 // implement class Eventable
 
