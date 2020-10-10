@@ -10,7 +10,8 @@
  * since it can be retrieved via the file descriptor by getsockname().
  */
 
-#include "poll.h"
+//#include "poll.h"
+#include "eventable.h"
 #include <string>
 using std::string;
 

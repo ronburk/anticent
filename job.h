@@ -1,74 +1,51 @@
 #ifndef JOB_H_
 #define JOB_H_
 
-enum JobPriority : unsigned short
+class JobList;
+
+enum class JobPriority : unsigned short
     {
-    PRI_HIGHEST     = 0,
-    PRI_HIGH        = 1,
-    PRI_LOW         = 2,
-    PRI_COUNT       = 3
+    SIGNAL      = 0,
+    HIGHEST     = 1,
+    HIGH        = 2,
+    LOW         = 3,
+    BLOCKED     = 4,
+    COUNT       = 5
     };
 
-class   Job2
+class   Job
     {
-    JobPriority priority;
-    bool        blocked;
-    Job2*       previous;
-    Job2*       next;
-    Job2*       parent;
-public:
-    Job2(JobPriority priority=PRI_LOW, Job2* parent=nullptr);
-    JobPriority SetPriority(JobPriority);
-    bool        IsBlocked() { return blocked; }
-    void        Block();
-    virtual ~Job2();
+    friend class    JobList;
+    JobPriority     priority, prevPriority;
+    Job*            next;
+    Job*            previous;
+
 protected:
-    virtual void Run();
-    virtual void ChildDied(Job* Child);
-    };
+    Job*       parent;
+    virtual void vSignal(int signum){}
+    virtual void vRun(){}
+    virtual void vDeathRequest(Job* dyingChild){}
+    virtual JobPriority  vBasePriority() { return JobPriority::LOW; }
+    virtual const char*  vClassName() { return "Job"; }
 
-
-
-class Job;
-
-class JobList
-    {
-    Job*    head;
-    Job*    tail;
 public:
-    JobList() : head(nullptr), tail(nullptr) {}
-    Job*    Pop();
-    void    Push(Job* job);
-    Job*    Remove(Job* job);
-    };
+    static void Init();
+    static void Scheduler();
 
-class Job
-    {
-    friend class JobList;
-    static JobList  Ready[];
-
-    Job*        next;
-    int         priority;
-public:
-    enum
-        {
-        PRI_HIGHEST     = 0,
-        PRI_HIGH        = 1,
-        PRI_LOW         = 2,
-        PRI_COUNT       = 3
-        };
-
-    static void     Scheduler();
-    static void     Shutdown();
-
-    Job();
+    Job(Job* parent, JobPriority priority=JobPriority::BLOCKED);
     virtual ~Job();
-    int     IsBlocked()         { return next == nullptr; }
-    int     GetPriority()       { return priority; }
-    int     SetPriority(int val){ return priority = val; }
-    virtual void Run();
-    virtual void Schedule(int priority=-1);
-    virtual void Wait();
+
+    JobPriority BasePriority()   { return vBasePriority(); }
+    void        Schedule(JobPriority priority=JobPriority::BLOCKED);
+    void        Block();
+    bool        IsBlocked() { return priority == JobPriority::BLOCKED; }
+    const char* ClassName() { return vClassName(); }
+    void        Ready();
+    void        Run()               { vRun(); }
+    void        Signal(int signum)  { vSignal(signum); }
+    void        Stop();
+    void        DeathRequest(Job* dyingChild) { vDeathRequest(dyingChild); }
+    void        Constructed();
     };
 
 #endif /*  JOB_H_ */

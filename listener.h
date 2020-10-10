@@ -2,29 +2,21 @@
 #define LISTENER_H_
 
 #include <string>
-#include "poll.h"
-#include "job.h"
+#include "eventable.h"
 using std::string;
 
 
-class   Listener : public Eventable, public Job
+class   Listener : public Eventable
     {
     string  name;
     int     port = -1;
+protected:
+    virtual const char* vClassName();
 public:
-    Listener(){}
+    Listener(Job* parent);
     int     Listen(const string& path);
     void    Listen(const string& nicname, int port, bool Ip6=false);
     ~Listener();
-    virtual void Event(int event);
-    };
-
-class HttpListener : public Listener
-    {
-    HttpListener(){}
-public:
-    static void Shutdown();
-    static void New(string nicname, int port, bool IP6=false);
     virtual void Event(int event);
     };
 

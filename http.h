@@ -1,36 +1,90 @@
 #ifndef HTTP_H_
 #define HTTP_H_
 
-#include "poll.h"
-#include "job.h"
+#include "init.h"
+#include "listener.h"
 #include <string>
 using std::string;
+
+class HttpListener : public Listener
+    {
+    friend void Init::NewHttpListener(string nicname, int port, bool IP6);
+
+    HttpListener(Job* parent):Listener(parent){}
+protected:
+    virtual const char*  vClassName() { return "HttpListener"; }
+
+public:
+    static void     Shutdown();
+    static void     New(string nicname, int port, bool IP6=false);
+    void            NewHttpConn(Job* parent, fd_t sock);
+    fd_t            Accept();
+    virtual void    Event(int event);
+    };
 
 class HttpConn;
 
 class HttpReader : public Job
     {
-    friend class HttpConn;
-    HttpConn*   connection;
-    HttpReader(HttpConn*);
+    HttpReader(Job* parent);
     string      request;
     bool        Parse();
+private:
+    friend void HttpListener::NewHttpConn(Job*, fd_t);
+    friend class HttpConn;
+protected:
+    virtual const char*  vClassName() { return "HttpReader"; }
+    virtual void vRun();
 public:
-    virtual void Run();
     };
 
-class HttpConn : public Eventable /* , public Job */
+class HttpWriter : public Job
     {
-    friend class HttpReader;
-    friend class HttpWriter;
-    HttpReader*     reader;
-    HttpConn(fd_t socket);
+    HttpWriter(Job* parent);
+    string          response;
+    string          buffer;
+private:
+    friend void HttpListener::NewHttpConn(Job*, fd_t);
+    friend class HttpConn;
 protected:
-    ssize_t         Read(void* buffer, size_t count);
-    ssize_t         Write(void* buffer, size_t count);
+    virtual void        vRun();
+    virtual JobPriority vBasePriority();
+    virtual const char*  vClassName() { return "HttpWriter"; }
 public:
-    static void     New(fd_t socket);
+    void                Write(const char* buffer, ssize_t count);
+    };
+
+
+class HttpConn : public Eventable
+    {
+    HttpConn(Job* parent);
+    HttpReader*     reader;
+    HttpWriter*     writer;
+private:
+    friend void     HttpListener::NewHttpConn(Job*, fd_t);
+    friend class    HttpReader;
+    friend class    HttpWriter;
+protected:
+    virtual const char*  vClassName() { return "HttpConn"; }
+    ssize_t         Read(char* buffer, ssize_t count);
+    ssize_t         Write(const char* buffer, ssize_t count);
+public:
+    void            NewHttpRequest(string requestText);
     virtual void    Event(int event);
+    };
+
+
+class HttpRequest : public Job
+    {
+    friend void HttpConn::NewHttpRequest(string requestText);
+
+    HttpRequest(Job* parent, HttpWriter* writer, string requestText);
+    HttpWriter* writer;
+protected:
+    virtual const char*  vClassName() { return "HttpRequest"; }
+    virtual JobPriority vBasePriority();
+    virtual void        vRun();
+public:
     };
 
 #endif /* HTTP_H_ */

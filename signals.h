@@ -1,16 +1,16 @@
 #ifndef SIGNALS_H_
 #define SIGNALS_H_
 
-#include "job.h"
-#include "poll.h"
+#include "eventable.h"
 
 class   Signals : public Eventable
     {
 public:
-    Signals();
+    static void Subscribe(Job* job, int signum);
+    static void Unsubscribe(Job* job);
+
+    Signals(Job* parent);
     virtual void Event(int event);
     };
-
-
 
 #endif /* SIGNALS_H_ */

@@ -12,10 +12,13 @@
 #include <cassert>
 #include <unistd.h>
 
-/* Bind() - create a listening socket bound to a specific port #
- *
- * The parameters
- */
+Listener::Listener(Job* parent)
+    : Eventable(parent)
+    {
+    Constructed();
+    }
+
+
 void Listener::Listen(const string& nicname, int port, bool Ip6)
     {
     fprintf(stderr, "Listener::Listen('%s',%d)\n", nicname.c_str(), port);
@@ -33,34 +36,8 @@ Listener::~Listener()
     {
     }
 
-void HttpListener::Event(int event)
+const char* Listener::vClassName()
     {
-    fprintf(stderr, "HttpListener gets event.\n");
-    fd_t conn = IPaddr::Accept(fd);
-    fprintf(stderr, "HttpListener accepts new connection.\n");
-    HttpConn::New(conn);
+    return "Listener";
     }
 
-static HttpListener* This;
-
-/* Shutdown() - trivial version
- *
- * Take ourselves out of the epoll interest list, and close our listening socket.
- * Not sure it needs to be any fancier than this. I suppose we could try to empty
- * out connections already in the accept queue if, for example, we knew we were
- * being fronted by a load balancer that has shut off the spigot of new connections.
- */
-void HttpListener::Shutdown()
-    {
-    fd_t socket = This->Del();
-    fprintf(stderr, "HttpListener::Shutdown() closing socket\n");
-    close(socket);
-    }
-
-void HttpListener::New(string nicname, int port, bool IP6)
-    {
-    assert(This == nullptr); // initial design allows for exactly one HTTP listener.
-    This = new HttpListener();
-    This->Listen(nicname, port, IP6);
-    This->Schedule(0);
-    }

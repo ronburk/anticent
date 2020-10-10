@@ -123,6 +123,7 @@ fd_t IPaddr::Bind(const string& nicname, int port)
     SetAddrFromEth(nicname);
     fd_t listenFd = socket(GetFamily(), SOCK_STREAM|SOCK_NONBLOCK, 0);
     DieIf(listenFd < 0, "socket");
+    // next two lines assume HTTP listener
     int   flag = 1;
     status = setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag));
     DieIf(status != 0, "setsockopt(SO_REUSEADDR)");
