@@ -48,24 +48,38 @@ private:
     friend class HttpConn;
 protected:
     virtual void        vRun();
-    virtual JobPriority vBasePriority();
+    virtual short vBasePriority();
     virtual const char*  vClassName() { return "HttpWriter"; }
 public:
     void                Write(const char* buffer, ssize_t count);
     };
 
+/*
+ events
+
+EPOLLIN
+EPOLLOUT
+EPOLLRDHUP   (same as read of 0)
+REQSTARTED
+REQFINISHED
+REQFINAL
+
+
+ */
 
 class HttpConn : public Eventable
     {
     HttpConn(Job* parent);
     HttpReader*     reader;
     HttpWriter*     writer;
+    bool            
 private:
     friend void     HttpListener::NewHttpConn(Job*, fd_t);
     friend class    HttpReader;
     friend class    HttpWriter;
 protected:
     virtual const char*  vClassName() { return "HttpConn"; }
+    virtual void    vDeathRequest(Job* dying);
     ssize_t         Read(char* buffer, ssize_t count);
     ssize_t         Write(const char* buffer, ssize_t count);
 public:
@@ -82,7 +96,7 @@ class HttpRequest : public Job
     HttpWriter* writer;
 protected:
     virtual const char*  vClassName() { return "HttpRequest"; }
-    virtual JobPriority vBasePriority();
+    virtual short vBasePriority();
     virtual void        vRun();
 public:
     };

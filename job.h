@@ -3,7 +3,25 @@
 
 class JobList;
 
-enum class JobPriority : unsigned short
+
+class   Job
+    {
+
+    friend class    JobList;
+    short           priority, prevPriority;
+    Job*            next;
+    Job*            previous;
+
+protected:
+    Job*       parent;
+    virtual void    vSignal(int signum){}
+    virtual void    vRun(){}
+    virtual void    vDeathRequest(Job* dyingChild){}
+    virtual short   vBasePriority() { return LOW; }
+    virtual const char*  vClassName() { return "Job"; }
+
+public:
+enum : unsigned short
     {
     SIGNAL      = 0,
     HIGHEST     = 1,
@@ -13,38 +31,22 @@ enum class JobPriority : unsigned short
     COUNT       = 5
     };
 
-class   Job
-    {
-    friend class    JobList;
-    JobPriority     priority, prevPriority;
-    Job*            next;
-    Job*            previous;
-
-protected:
-    Job*       parent;
-    virtual void vSignal(int signum){}
-    virtual void vRun(){}
-    virtual void vDeathRequest(Job* dyingChild){}
-    virtual JobPriority  vBasePriority() { return JobPriority::LOW; }
-    virtual const char*  vClassName() { return "Job"; }
-
-public:
     static void Init();
     static void Scheduler();
 
-    Job(Job* parent, JobPriority priority=JobPriority::BLOCKED);
+    Job(Job* parent, short priority=BLOCKED);
     virtual ~Job();
 
-    JobPriority BasePriority()   { return vBasePriority(); }
-    void        Schedule(JobPriority priority=JobPriority::BLOCKED);
+    short       BasePriority()   { return vBasePriority(); }
+    void        Schedule(short priority=BLOCKED);
+    void        Unschedule();
     void        Block();
-    bool        IsBlocked() { return priority == JobPriority::BLOCKED; }
+    bool        IsBlocked() { return priority == BLOCKED; }
     const char* ClassName() { return vClassName(); }
     void        Ready();
     void        Run()               { vRun(); }
     void        Signal(int signum)  { vSignal(signum); }
-    void        Stop();
-    void        DeathRequest(Job* dyingChild) { vDeathRequest(dyingChild); }
+    void        DeathRequest();
     void        Constructed();
     };
 

@@ -13,10 +13,12 @@ struct  EventName
 
 EventName EventNames[] =
     {
-    { EPOLLIN, "EPOLLIN" },
-    { EPOLLPRI, "EPOLLPRI" },
-    { EPOLLOUT, "EPOLLOUT" },
-    { EPOLLOUT, "EPOLLOUT" },
+    { EPOLLIN,      "EPOLLIN"       },
+    { EPOLLPRI,     "EPOLLPRI"      },
+    { EPOLLOUT,     "EPOLLOUT"      },
+    { EPOLLRDHUP,   "EPOLLRDHUP"    },
+    { EPOLLHUP,     "EPOLLHUP"      },
+    { EPOLLERR,     "EPOLLERR"      },
     };
 
 int nEventNames = sizeof(EventNames)/sizeof(EventName);
@@ -92,7 +94,7 @@ int  Eventable::Poll(int milliseconds)
     }
 
 
-Eventable::Eventable(Job* parent, JobPriority priority)
+Eventable::Eventable(Job* parent, short priority)
     : Job(parent, priority)
     {
     Constructed();

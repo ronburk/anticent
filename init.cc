@@ -8,7 +8,7 @@ void Init::NewInit()
     }
 
 Init::Init()
-    : Job(nullptr, JobPriority::BLOCKED)
+    : Job(nullptr, Job::BLOCKED)
     {
     NewHttpListener("eno1", 8080);
     Constructed();

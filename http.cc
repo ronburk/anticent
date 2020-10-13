@@ -105,7 +105,7 @@ void HttpConn::Event(int event)
         if(reader)
             {
             fprintf(stderr, "HttpConn::Event() schedules reader\n");
-            reader->Schedule(JobPriority::LOW);
+            reader->Ready();
             }
     // if we got a writes-are-unblocked event
     if((event & EPOLLOUT) != 0)
@@ -116,6 +116,36 @@ void HttpConn::Event(int event)
             }
     }
 
+void    HttpConn::vDeathRequest(Job* dying)
+    {
+    if(dying == reader) // if the reader is giving up
+        {
+        fprintf(stderr, "HttpConn::Read(): client closed our input %d\n", errno);
+        shutdown(Eventable::fd, SHUT_RD);   // then it's OK to half-close
+        reader = nullptr;
+        }
+
+    delete dying;
+    }
+
+/* HttpConn::Read() - socket-level read function.
+
+Keep in mind well-known problem: if server closes its read side while
+client is still writing, TCP stack will send a RST (reset) to the
+client, which may then discard significant received data that hasn't
+made it to user space.  Upshot is that we generally want reader alive
+until the client closes, even if it's just discarding data it's not
+going to use.
+
+How do we detect the client has closed the write side of their
+connection?  We get an EPOLLIN event on the socket and the very next
+read() returns 0. The logic goes like this:
+a) HttpReader must exhaust input to get a new EPOLLIN event.
+b) HttpReader goes BLOCKED if it exhausts input
+c) HttpReader only unblocks for EPOLLIN event
+d) So if first read of HttpReader->vRun gets 0 bytes, writer is done.
+
+ */
 ssize_t HttpConn::Read(char* buffer, ssize_t count)
     {
     ssize_t result;
@@ -123,11 +153,6 @@ ssize_t HttpConn::Read(char* buffer, ssize_t count)
     result  = read(Eventable::fd, buffer, count);
     fprintf(stderr, "HttpConn::Read([%d], %zu) = %ld\n", Eventable::fd, count, result);
     // if client has closed their write side
-    if(result == 0)
-        {
-        fprintf(stderr, "HttpConn::Read(): client closed our input\n");
-        shutdown(Eventable::fd, SHUT_RD);
-        }
     return result;
     }
 
@@ -135,12 +160,24 @@ ssize_t HttpConn::Write(const char* buffer, ssize_t count)
     {
     ssize_t result = 0;
 
-    fprintf(stderr, "HttpConn::Write(%zu) bytes on [%d]\n", count, Eventable::fd);
-    result  = write(Eventable::fd, buffer, count);
-    fprintf(stderr, "HttpConn::Write(%zu) bytes returns %zd\n", count, result);
-    if(result < count)
-        writer->Block();
-    fprintf(stderr, "HttpConn::Write(%zu) bytes returns %zd\n", count, result);
+// ??? must track requests and last request
+    if(count == 0)  // if that's all the data for this request
+        {
+        fprintf(stderr, "%s: End of response.\n", __func__);
+        if(reader == nullptr && true) // ??? if no more requests to process
+            {
+            shutdown(Eventable::fd, SHUT_WR);
+            close(Eventable::fd);  // remove from epoll, etc.
+            }
+        }
+    else
+        {
+        result  = write(Eventable::fd, buffer, count);
+        fprintf(stderr, "HttpConn::Write(%zu) bytes on [%d] returns %zd\n",
+            count, Eventable::fd, result);
+        if(result < count)
+            writer->Block();
+        }
     return result;
     }
 
@@ -200,6 +237,17 @@ state 2: waiting to read next request
 
  * remember: when Run() is called, this Job is removed being scheduled.
  */
+/*
+  events:
+      Try to look at the world from reader's perspective.
+          EPOLLIN - wake up and read
+          
+      Reall, we need EPOLLIN (you have something to read). And 
+  EPOLLRDHUP
+  EPOLLIN
+  EPOLLHUP
+ */
+
 void HttpReader::vRun()
     {
     assert(parent != nullptr);
@@ -209,11 +257,16 @@ void HttpReader::vRun()
 
     ssize_t nbytes = 0;
     bool    done   = false;
-    while(!done)
+    for(int iRead = 0; !done; ++iRead)
         {
         nbytes = connection->Read(buffer, BUFSIZE);
         fprintf(stderr, "read %ld bytes of http request.\n", nbytes);
-        perror("reader");
+        if(iRead == 0 && nbytes == 0) // if client closed their write-side
+            {
+            fprintf(stderr, "HttpReader begs for death.\n");
+            DeathRequest();
+            return;
+            }
         if(nbytes >= 0)
             {
             buffer[nbytes] = '\0';
@@ -232,6 +285,7 @@ void HttpReader::vRun()
     if(nbytes == -1)
         {
         fprintf(stderr, "==============errno=%d\n", errno);
+        perror("reader");
         switch(errno)
             {
             case    EINTR   :
@@ -253,9 +307,57 @@ void HttpReader::vRun()
     }
 
 HttpRequest::HttpRequest(Job* parent, HttpWriter* writer, string requestText)
-    : Job(parent, JobPriority::LOW), writer(writer)
+    : Job(parent, Job::LOW), writer(writer)
     {
     Constructed();
+    }
+/*
+we need to linger
+ */
+enum
+    {
+    START,
+    READ,
+    WRITE,
+    READWRITE,
+    LINGER,
+    CLOSED,
+    
+    READUNBLOCKED,
+    READBLOCKED,
+    WRITEUNBLOCKED,
+    WRITEBLOCKED,
+    READCLOSED,
+    WRITECLOSED,
+    };
+
+int state = START;
+void Machine(int event)
+    {
+    bool    error       = false;
+    int     nextState   = state;
+    switch(state)
+        {
+        case    START : // initial state
+            switch(event)
+                {
+                case    READUNBLOCKED:
+                    nextState   = READ;
+                    break;
+                case    WRITEUNBLOCKED:
+                    nextState   = WRITE;
+                    break;
+                case    READCLOSED: // possible? maybe
+                    nextState   = CLOSED;
+                    break;
+                default : error = true;
+                }
+            break;
+        case    READ : // reading
+            break;
+        }
+    assert(error == false);
+    state   = nextState;
     }
 
 void HttpRequest::vRun()
@@ -267,15 +369,16 @@ void HttpRequest::vRun()
 "Last-Modified: Wed, 22 Jul 2009 19:15:56 GMT\r\n"
 "Content-Length: 0\r\n"
 "Content-Type: text/html\r\n"
-"Connection: Closed\r\n\r\n";
+"Connection: close\r\n\r\n";
 
     fprintf(stderr, "HttpRequest::vRun()\n");
-    static_cast<HttpWriter*>(writer)->Write(response, strlen(response));
+    writer->Write(response, strlen(response));
+    writer->Write(response, 0); // end of response
     Block();
     }
-JobPriority HttpRequest::vBasePriority()
+short HttpRequest::vBasePriority()
     {
-    return JobPriority::LOW;
+    return Job::LOW;
     }
 
 /* HttpWriter:
@@ -289,34 +392,28 @@ it should unblock when there is a EPOLLOUT I/O event.
  */
 
 HttpWriter::HttpWriter(Job* parent)
-    : Job(parent, JobPriority::BLOCKED)
+    : Job(parent, Job::BLOCKED)
     {
     Constructed();
     }
 
 void    HttpWriter::vRun()
     {
-    fprintf(stderr, "HttpWriter::vRun() returns\n");
-
     // if there are bytes waiting to go out
     if(buffer.size() > 0)
         {
-    fprintf(stderr, "HttpWriter::vRun() returns\n");
         auto nBytes = static_cast<HttpConn*>(parent)->Write(&buffer[0], buffer.size());
-    fprintf(stderr, "HttpWriter::vRun() returns\n");
         if(nBytes > 0)
             buffer.erase(0, nBytes);
-    fprintf(stderr, "HttpWriter::vRun() returns\n");
         }
-    fprintf(stderr, "HttpWriter::vRun() returns\n");
     if(buffer.size() == 0)
         Block();
     fprintf(stderr, "HttpWriter::vRun() returns\n");
     }
 
-JobPriority HttpWriter::vBasePriority()
+short HttpWriter::vBasePriority()
     {
-    return JobPriority::HIGH;
+    return Job::HIGH;
     }
 
 void HttpWriter::Write(const char* otherBuffer, ssize_t count)

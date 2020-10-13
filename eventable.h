@@ -17,7 +17,7 @@ public:
     static int  Poll(int milliseconds);
     static void PollInit();
 
-    Eventable(Job* parent, JobPriority priority=JobPriority::BLOCKED);
+    Eventable(Job* parent, short priority=Job::BLOCKED);
     virtual ~Eventable();
 
     int             Add(fd_t fd, int eventFlags);

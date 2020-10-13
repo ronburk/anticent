@@ -4,29 +4,25 @@
 #include "listener.h"
 #include <unistd.h> // sleep
 
-const char* Priname(JobPriority pri)
+const char* Priname(short pri)
     {
     const char* result = "Can't happen.";
     switch(pri)
         {
-        case    JobPriority::SIGNAL  :
+        case    Job::SIGNAL  :
             result = "SIGNAL";  break;
-        case    JobPriority::HIGHEST :
+        case    Job::HIGHEST :
             result = "HIGHEST"; break;
-        case    JobPriority::HIGH    :
+        case    Job::HIGH    :
             result = "HIGH";    break;
-        case    JobPriority::LOW     :
+        case    Job::LOW     :
             result = "LOW";     break;
-        case    JobPriority::BLOCKED :
+        case    Job::BLOCKED :
             result = "BLOCKED"; break;
-        case    JobPriority::COUNT   :
+        case    Job::COUNT   :
             result = "COUNT";   break;
         }
     return result;
-    }
-const char* Priname(int pri)
-    {
-    return Priname(static_cast<JobPriority>(pri));
     }
 
 class JobList
@@ -68,7 +64,7 @@ bool    JobList::Contains(Job* This)
 
 Job* JobList::Remove(Job* Job)
     {
-    fprintf(stderr, "Remove %p\n", Job);
+//    fprintf(stderr, "Remove %p\n", Job);
     assert(count > 0);
     assert(Contains(Job));
     assert(Job->next != nullptr && Job->previous != nullptr);
@@ -91,7 +87,7 @@ Job* JobList::Remove(Job* Job)
 
 void JobList::Push(Job* newTail)
     {
-    fprintf(stderr, "Push %p\n", newTail);
+//    fprintf(stderr, "Push %p\n", newTail);
     assert(newTail->next == nullptr); // should not be on any list
     assert(newTail->previous == nullptr);
     if(head == nullptr)
@@ -135,24 +131,24 @@ Job* JobList::Pop()
 #endif
 
 const int MAX_SHUTDOWN_SECONDS = 15;
-const int MAX_PRIORITY_LEVELS  = (int)JobPriority::COUNT;
+const int MAX_PRIORITY_LEVELS  = Job::COUNT;
 int     nJobs = 0;
 JobList Jobs[MAX_PRIORITY_LEVELS];
 
 
-Job::Job(Job* parent, JobPriority priority)
+Job::Job(Job* parent, short priority)
     : priority(priority), next(nullptr), previous(nullptr), parent(parent)
     {
     prevPriority    = BasePriority();
-    auto iPriority  = static_cast<int>(priority);
-    Jobs[iPriority].Push(this);
+    Jobs[priority].Push(this);
     ++nJobs;
     }
 Job::~Job()
     {
     assert(nJobs > 0);
-    auto iPriority = static_cast<int>(priority);
-    Jobs[iPriority].Remove(this);
+    assert(next == nullptr);
+//    auto iPriority = static_cast<int>(priority);
+//    Jobs[iPriority].Remove(this);
     --nJobs;
     }
 
@@ -161,7 +157,7 @@ void Job::Block()
     if(!IsBlocked())
         {
         prevPriority = priority;
-        Schedule(JobPriority::BLOCKED);
+        Schedule(Job::BLOCKED);
         }
     else
         fprintf(stderr, "%s already blocked!\n", ClassName());
@@ -178,7 +174,13 @@ void Job::Constructed()
         ClassName(), static_cast<int>(priority));
     }
 
-void Job::Schedule(JobPriority newPriority)
+void Job::Unschedule()
+    {
+    int  iNowPriority   = static_cast<int>(this->priority);
+    Jobs[iNowPriority].Remove(this);
+    }
+
+void Job::Schedule(short newPriority)
     {
     int  iNowPriority   = static_cast<int>(this->priority);
     int  iNewPriority   = static_cast<int>(newPriority);
@@ -204,7 +206,7 @@ void Job::Scheduler()
     int iShutdown = 0;
     for(; nJobs && iShutdown < MAX_SHUTDOWN_SECONDS;)
         {
-        int runnable = 0;
+        int runnable    = 0;
         for(int iPriority=0; iPriority < MAX_PRIORITY_LEVELS; ++iPriority)
             {
             auto    nRunnable = Jobs[iPriority].Count();
@@ -218,14 +220,16 @@ void Job::Scheduler()
                     auto next = iJob->next;  // save it before it might change
                     fprintf(stderr, "%s->Run()\n",
                         iJob->ClassName());
-                    assert(iJob->priority == static_cast<JobPriority>(iPriority));
+                    assert(iJob->priority == iPriority);
                     iJob->Run();
                     iJob    = next;
                     }
                 runnable += nRunnable;
                 }
             }
-        fprintf(stderr, "%d/%d jobs were runnable\n", runnable, nJobs);
+        fprintf(stderr, "%d/%d jobs were runnable (%d blocked)\n",
+            runnable, nJobs, Jobs[BLOCKED].count);
+//        assert(nJobs == runnable + Jobs[Job::BLOCKED].count);
         if(runnable == 0)
             {
             int milliseconds = FinishUp ? 1*1000 : 30*1000;
@@ -236,6 +240,13 @@ void Job::Scheduler()
                 ++iShutdown;
             }
         }
+    }
+
+void Job::DeathRequest()
+    {
+    Unschedule(); // remove ourselves from scheduler
+    if(parent)
+        parent->vDeathRequest(this);
     }
 
 
