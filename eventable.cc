@@ -1,5 +1,6 @@
 #include "eventable.h"
 #include <cassert>
+#include <cstring>
 #include <cstdio>
 #include <unistd.h> // close()
 
@@ -22,9 +23,9 @@ EventName EventNames[] =
     };
 
 int nEventNames = sizeof(EventNames)/sizeof(EventName);
-void    DumpEvent(int event)
+const char*    DumpEvent(int event)
     {
-    char output[512];
+    static char output[64];
 
     output[0] = '\0';
     for(int iVal = 1; iVal; iVal<<=1)
@@ -47,16 +48,17 @@ void    DumpEvent(int event)
             sprintf(output+strlen(output), "0x%08X", iVal);
             }
         }
-    fprintf(stderr, "%s\n", output);
+    return output;
     }
 
 
 
 fd_t    epollFd;    // file descriptor for epoll interest group
 int     nSockets;
-void Init::InitEventable()
+void Eventable::InitEventable()
     {
-    fprintf(stderr, "Init::InitEventable()\n");
+    fprintf(stderr, "InitEventable()\n");
+    assert(epollFd == 0); // should only get called once!
 
     epollFd     = epoll_create(1);
     if(epollFd < 0)
@@ -84,26 +86,26 @@ int  Eventable::Poll(int milliseconds)
     for(int iSocket=0; iSocket < nAwake; ++iSocket)
         {
         auto This = static_cast<Eventable*>(events[iSocket].data.ptr);
-        fprintf(stderr, "%s event on socket [%d] -> ", This->ClassName(), This->fd);
+        auto eventFlags = events[iSocket].events;
+        fprintf(stderr, "event on socket [%d] -> %s\n",
+            This->fd, DumpEvent(eventFlags));
 
-        DumpEvent(events[iSocket].events);
-        This->Event(events[iSocket].events);
+        This->Event(eventFlags);
         }
     fprintf(stderr, "epoll_wait got %d/%d sockets\n", nAwake, nSockets);
     return nSockets;
     }
 
 
-Eventable::Eventable(Job* parent, short priority)
-    : Job(parent, priority)
+Eventable::Eventable()
     {
-    Constructed();
     }
 int Eventable::Add(int fd, int eventFlags)
     {
     assert(this->fd == -1);  // this object can't have two active descriptors
 
-    fprintf(stderr, "Eventable::Add(fd=%d, 0x%08X)\n", fd, eventFlags);
+    fprintf(stderr, "Eventable::Add(fd=%d, %s)\n",
+        fd, DumpEvent(eventFlags));
     // we assume everything is edge-triggered
     struct epoll_event event = {eventFlags|EPOLLET, {this}};
     int status = epoll_ctl(epollFd, EPOLL_CTL_ADD, fd, &event);
@@ -119,9 +121,18 @@ int Eventable::Add(int fd, int eventFlags)
         }
     return status;
     }
-fd_t Eventable::Del()
+
+void Eventable::Close()
     {
-    assert(this->fd != -1);
+    close(fd);
+    fd  = -1;
+    --nSockets;
+    }
+
+
+fd_t Eventable::Ignore()
+    {
+    assert(fd != -1);
 
     int status = epoll_ctl(epollFd, EPOLL_CTL_DEL, fd, nullptr);
     if(status != 0)
@@ -129,25 +140,12 @@ fd_t Eventable::Del()
         perror("EPOLL_CTL_DEL failed");
         assert(false);
         }
-    else
-        {
-        this->fd    = -1;
-        --nSockets;
-        }
-    return this->fd;
+    --nSockets;
+    return fd;
     }
 Eventable::~Eventable()
     {
+    fprintf(stderr, "Eventable::~Eventable() fd=%d\n", fd);
     if(fd >= 0) // if we have a file descriptor in epoll's interest list
-        {
-        int status = epoll_ctl(epollFd, EPOLL_CTL_DEL, fd, nullptr);
-        if(status != 0)
-            {
-            perror("EPOLL_CTL_DEL failed");
-            assert(false);
-            }
-        --nSockets;
-        }
-    close(fd);
-    fd = -1;
+        Close();
     }

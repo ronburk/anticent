@@ -6,6 +6,8 @@
 #include <cassert>
 #include <unistd.h>
 #include <cerrno>
+#include <vector>
+using std::vector;
 
 /*
 
@@ -15,7 +17,14 @@ crazy idea: an object merely signals its interest to Signals. Signals keeps
 a list of these Job pointers (any of which could become invalid!). When a
 signal occurs, Signals reschedules all the relevant Job's with priority SIGNAL.
 Job knows to call the ::Signal() function instead of ::Run(), and then reschedule
-each job at its previous priority.
+each job at its previous priority. Doesn't work because it might have been blocked,
+in which case we would inadvertently cause it to run.
+
+2nd crazy idea: only Jobs that need to be signaled are the ones that don't run.
+Probably a time to go for generality rather than micro-efficiency.
+
+So, Signals just keeps vector of everybody who registers to get a signal,
+then goes through and runs them when the Signals job runs.
 
   Any particular type of Job (descendant) might want to receive any
 particular type of signal. Signals must have
@@ -41,9 +50,15 @@ automatically deregister its signal handler when it destructs.
  * 
  */
 
+vector<Job*>    Subscribers;
+
+void Signals::Subscribe(Job* job, int signum)
+    {
+    Subscribers.push_back(job);
+    }
 
 Signals::Signals(Job* parent)
-    : Eventable(parent)
+    : Job(parent)
     {
     sigset_t    signalMask;
 
@@ -57,9 +72,11 @@ Signals::Signals(Job* parent)
         perror("signalfd");
         assert(false);
         }
-    fprintf(stderr, "SIGINT handler installed, I hope.\n");
     Eventable::Add(sigFd, EPOLLIN);
+    fprintf(stderr, "[%s] SIGINT handler installed on fd %d\n",
+        __PRETTY_FUNCTION__, sigFd);
     }
+
 void Signals::Event(int event)
     {
     fprintf(stderr, "Got signal event!\n");
@@ -80,10 +97,16 @@ void Signals::Event(int event)
                 }
             }
         assert(nBytes == sizeof(info));
+        for(auto job: Subscribers)
+            job->Signal(info.ssi_signo);
         }
     
     static int foober = 0;
     if(foober++)
+        {
+        fprintf(stderr, "[%s] double-Ctrl-C exit.\n",
+            __PRETTY_FUNCTION__);
         exit(2);
+        }
     }
 

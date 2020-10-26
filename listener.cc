@@ -13,7 +13,7 @@
 #include <unistd.h>
 
 Listener::Listener(Job* parent)
-    : Eventable(parent)
+    : Job(parent)
     {
     Constructed();
     }

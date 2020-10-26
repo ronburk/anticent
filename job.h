@@ -1,44 +1,59 @@
 #ifndef JOB_H_
 #define JOB_H_
 
-class JobList;
+#include "dlist.h"
 
-
-class   Job
+class Job;
+#if 0
+class JobList
     {
-
-    friend class    JobList;
-    short           priority, prevPriority;
-    Job*            next;
-    Job*            previous;
-
-protected:
-    Job*       parent;
-    virtual void    vSignal(int signum){}
-    virtual void    vRun(){}
-    virtual void    vDeathRequest(Job* dyingChild){}
-    virtual short   vBasePriority() { return LOW; }
-    virtual const char*  vClassName() { return "Job"; }
-
+    Job*    head;
+    int     count;
 public:
-enum : unsigned short
-    {
-    SIGNAL      = 0,
-    HIGHEST     = 1,
-    HIGH        = 2,
-    LOW         = 3,
-    BLOCKED     = 4,
-    COUNT       = 5
+    friend class Job;
+    JobList() : head(nullptr), count(0) {}
+
+    void    Push(Job* job);
+    Job*    Remove(Job* job);
+    Job*    Pop();
+    int     Count() { return count; }
+    bool    Contains(Job* This) { return true; }
     };
+#endif
 
-    static void Init();
+class   Job : public DLink
+    {
+    friend class        JobList;
+    short               priority, prevPriority;
+//    Job*                next;
+//    Job*                previous;
+protected:
+    Job*                parent;
+    virtual void        vSignal(int signum){}
+    virtual void        vRun(){}
+    virtual void        vDeathRequest(Job* dyingChild){}
+    virtual short       vBasePriority() { return LOW; }
+    virtual const char* vClassName() { return "Job"; }
+public:
+    enum : unsigned short
+        {
+        ROOT        = 0,
+        HIGHEST     = 1,
+        HIGH        = 2,
+        LOW         = 3,
+        BLOCKED     = 4,
+        COUNT       = 5
+        };
+
     static void Scheduler();
+    static void Shutdown();
 
-    Job(Job* parent, short priority=BLOCKED);
+    Job(Job* parent);
     virtual ~Job();
 
-    short       BasePriority()   { return vBasePriority(); }
-    void        Schedule(short priority=BLOCKED);
+//    short       BasePriority()   { return vBasePriority(); }
+    void        SetPriority(short priority);
+    void        Schedule(short priority=BLOCKED, short prevPriority=LOW);
     void        Unschedule();
     void        Block();
     bool        IsBlocked() { return priority == BLOCKED; }

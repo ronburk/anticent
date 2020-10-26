@@ -10,14 +10,13 @@
  * since it can be retrieved via the file descriptor by getsockname().
  */
 
-//#include "poll.h"
-#include "eventable.h"
 #include <string>
 using std::string;
 
 #include <sys/socket.h>
-//#include <sys/types.h>
 #include <arpa/inet.h>
+
+using fd_t  = int;
 
 class   IPaddr
     {

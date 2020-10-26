@@ -39,7 +39,8 @@ fd_t IPaddr::Accept(fd_t listenFd)
     socklen_t size = newAddr;
     result = accept4(listenFd, newAddr, &size, SOCK_NONBLOCK);
     // ??? handle EAGAIN, EWOULDBLOCK, ECONNABORTED, EINTR, etc.
-    fprintf(stderr, "port number %d\n", ntohs(newAddr.ip4.sin_port));
+    fprintf(stderr, ">>>>>>>>>>>>>>>>>>>>>>>>>>>>port number %d\n",
+        ntohs(newAddr.ip4.sin_port));
     
     DieIf(result < 0, "accept4");
     return result;

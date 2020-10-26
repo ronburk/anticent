@@ -2,11 +2,11 @@
 #define LISTENER_H_
 
 #include <string>
-#include "eventable.h"
 using std::string;
+#include "eventable.h"
+#include "job.h"
 
-
-class   Listener : public Eventable
+class   Listener : public Eventable, public Job
     {
     string  name;
     int     port = -1;

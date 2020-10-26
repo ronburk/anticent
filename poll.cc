@@ -109,7 +109,10 @@ int  Eventable::Poll(int milliseconds)
     int     nAwake;
 
     fprintf(stderr, "epoll_wait(%d)\n", milliseconds);
-    nAwake = epoll_wait(epollFd, events, 100, milliseconds);
+
+    do {
+        nAwake = epoll_wait(epollFd, events, 100, milliseconds);
+        } while(nAwake < 0 && errno == EINTR);
 //        fprintf(stderr, "signalNum = %d\n", signalNum);
     if(nAwake < 0)
         {
