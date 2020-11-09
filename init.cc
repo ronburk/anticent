@@ -43,6 +43,10 @@ void Init::vDeathRequest(Job* child)
         __PRETTY_FUNCTION__, nListeners);
     if(nListeners <= 0)
         Job::Shutdown();
+    auto fred = new char[55];
+    fred[0] = 'd';
+    fprintf(stderr, "fred = '%c'\n", fred[0]);
+    fred = new char[99];
     }
 
 

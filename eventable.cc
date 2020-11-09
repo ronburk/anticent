@@ -75,8 +75,9 @@ int  Eventable::Poll(int milliseconds)
     {
     struct epoll_event  events[100];
     int                 nAwake;
+    bool                needNl = true;
 
-    fprintf(stderr, "epoll_wait(%d)\n", milliseconds);
+    fprintf(stderr, "epoll_wait(%d) ", milliseconds);
     nAwake = epoll_wait(epollFd, events, 100, milliseconds);
     if(nAwake < 0)
         {
@@ -87,12 +88,17 @@ int  Eventable::Poll(int milliseconds)
         {
         auto This = static_cast<Eventable*>(events[iSocket].data.ptr);
         auto eventFlags = events[iSocket].events;
+        if(needNl)
+            {
+            fprintf(stderr, "\n");
+            needNl = false;
+            }
         fprintf(stderr, "event on socket [%d] -> %s\n",
             This->fd, DumpEvent(eventFlags));
 
         This->Event(eventFlags);
         }
-    fprintf(stderr, "epoll_wait got %d/%d sockets\n", nAwake, nSockets);
+    fprintf(stderr, "got %d/%d sockets\n", nAwake, nSockets);
     return nSockets;
     }
 

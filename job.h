@@ -3,23 +3,15 @@
 
 #include "dlist.h"
 
-class Job;
-#if 0
-class JobList
+class RunCallback
     {
-    Job*    head;
-    int     count;
 public:
-    friend class Job;
-    JobList() : head(nullptr), count(0) {}
-
-    void    Push(Job* job);
-    Job*    Remove(Job* job);
-    Job*    Pop();
-    int     Count() { return count; }
-    bool    Contains(Job* This) { return true; }
+    virtual void operator()() = 0;
     };
-#endif
+
+
+
+class Job;
 
 class   Job : public DLink
     {

@@ -9,6 +9,8 @@ using std::make_unique;
 #include "init.h"
 #include "job.h"
 
+#include <sanitizer/lsan_interface.h>
+
 char* Leak()
     {
     char * waste = new char[160*1024];
@@ -30,6 +32,8 @@ int main(int argc, char* argv[])
     auto init = Init::NewInit();
     V8Main(argc, argv);
     Job::Scheduler();
+    __lsan_do_leak_check();
     fprintf(stderr, "normal exit. \n");
+    __lsan_do_recoverable_leak_check();
     return 0;
     }

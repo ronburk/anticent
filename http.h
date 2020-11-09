@@ -122,6 +122,7 @@ inline int BitChanged(int bit, int was, int is)
 
 
 
+#if 0
 class HttpRequest : public Job
     {
     friend void HttpConn::NewHttpRequest(string requestText);
@@ -136,5 +137,5 @@ protected:
     virtual void        vRun();
 public:
     };
-
+#endif
 #endif /* HTTP_H_ */

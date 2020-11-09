@@ -1,4 +1,5 @@
 #include "http.h"
+#include "httpreq.h"
 #include "ipaddr.h"
 #include <cstdio>
 #include <unistd.h> // read, write
@@ -598,41 +599,6 @@ void HttpReader::vRun()
         }
     }
 
-HttpRequest::HttpRequest(Job* parent, HttpWriter* writer, string requestText)
-    : Job(parent), writer(writer)
-    {
-    // born unscheduled
-    Constructed();
-    }
-HttpRequest::~HttpRequest()
-    {
-    // should have gotten scheduled before dying!
-    Unschedule();
-    }
-
-void HttpRequest::vRun()
-    {
-    const char* response = ""
-"HTTP/1.1 404 OK\r\n"
-"Date: Mon, 27 Jul 2009 12:28:53 GMT\r\n"
-"Server: Apache/2.2.14 (Win32)\r\n"
-"Last-Modified: Wed, 22 Jul 2009 19:15:56 GMT\r\n"
-"Content-Length: 0\r\n"
-"Content-Type: text/html\r\n"
-"Connection: close\r\n\r\n";
-
-    fprintf(stderr, "HttpRequest::vRun()\n");
-// ??? check for blocking
-    writer->Write(response, strlen(response));
-//    writer->Write(response, 0); // end of response
-    // only when done ???
-    DeathRequest();
-    }
-
-short HttpRequest::vBasePriority()
-    {
-    return Job::LOW;
-    }
 
 /* HttpWriter:
 
