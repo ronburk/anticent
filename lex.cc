@@ -2,6 +2,7 @@
  */
 
 #include <cassert>
+#include <cstring>
 #include <cstdlib>
 #include <cstdio>
 #include <cstdarg>
@@ -66,27 +67,18 @@ IntSet Union(const IntSet& a, const IntSet& b)
     auto iter = std::unique(result.begin(), result.end());
     result.erase(iter, result.end());
     
-#if 0
-    std::sort(a.begin(), a.end());
-    std::sort(b.begin(), b.end());
-
-    IntSet result;
-    std::set_union(a.begin(), a.end(), b.begin(), b.end(),
-        std::inserter(result,result.begin()));
-#endif
     return result;
     }
-void DumpIntSet(const IntSet& a)
+void DumpIntSet(FILE*output, const IntSet& a)
     {
-    printf(" {");
+    fprintf(output, " {");
     for(const auto& i:a)
         {
         if(&i != &(*a.begin())) // if not first iteration
-            printf(",");
-        printf("%d", i);
+            fprintf(output, ",");
+        fprintf(output, "%d", i);
         }
-    printf("}");
-
+    fprintf(output, "}");
     }
 
 class SyntaxNode;
@@ -97,15 +89,18 @@ class Machine
 public:
     static vector<IntSet>       followpos;
     static vector<IntSet>       states;
+    static vector<bool>         final;
+    static vector<IntSet>       actions;
     static vector<Transition>   transitions;
     
     static void             AddToFollowPos(int pos, IntSet& set);
     static void             CalculateFollowPos(SyntaxNode* tree);
     static void             CreateDfa(SyntaxNode* root);
     static int              GetStateNum(const IntSet& newState, bool Debug);
-    static void             Dump();
-    static void             DumpDfa();
+    static void             Dump(FILE* output);
+    static void             DumpDfa(FILE* output);
     static void             Generate(FILE* output);
+    static void             GenerateMachine(FILE* output);
     };
 
 class SyntaxNode
@@ -114,14 +109,13 @@ class SyntaxNode
 public:
     SyntaxNode(Sym symbol);
     SyntaxNode(Sym symbol, SyntaxNode* left, SyntaxNode* right=nullptr);
-    bool            isSentinel() { return isLeaf && symbol == '\0'; }
-    void            Dump();
+    void            Dump(FILE* output);
+    void            DumpSyntax(FILE* output);
     int             Relation(Sym left, Sym right);
     void            CalculateFollowPos();
     static int      nodeCount;
     static int      termCount;
     static vector<Sym>  positions;
-//    static vector<IntSet>*      followpos;
     bool            isLeaf  = false;
     SyntaxNode*     left    = nullptr;
     SyntaxNode*     right   = nullptr;
@@ -135,6 +129,7 @@ public:
 
 vector<Machine::Transition> Machine::transitions;
 vector<IntSet> Machine::states;
+vector<bool> Machine::final;
 vector<IntSet> Machine::followpos;
 void Machine::AddToFollowPos(int pos, IntSet& set)
     {
@@ -154,12 +149,6 @@ int Machine::GetStateNum(const IntSet &possible, bool Debug)
 
     // sort, unique
     auto newState = Union(possible, possible);
-    if(Debug)
-        {
-        printf("after union, = ");
-        DumpIntSet(newState);
-        printf("\n");
-        }
     for(size_t iState=0; iState < states.size(); ++iState)
         {
         auto state = states[iState];
@@ -184,107 +173,152 @@ void Machine::CreateDfa(SyntaxNode* root)
     for(decltype(states.size()) iState = 0; iState < states.size(); ++iState)
         {
         auto state = states[iState];
-        for(Sym iChar=0; iChar<256; ++iChar)
+//        for(Sym iChar=0; iChar<256; ++iChar)
+        for(Sym iChar=0; iChar<=SENTINEL; ++iChar)
             {
             bool Debug=(iState == 1 && iChar == 'a');
             IntSet newState;
             for(auto spos: state) // for each position in current state
-                {
-                if(Debug)printf("position in state[%ld]=%d\n", iState, spos);
-//                    if(Debug)
-//                    printf("fpos = %d, sym=%s\n", fpos, SymPrint(SyntaxNode::positions[fpos]));   
                 if(SyntaxNode::positions[spos] == iChar)
-                    {
                     newState = Append(newState, followpos[spos]);
-                    if(Debug)
-                        {
-                        printf("newState + followpos[%d] = ", spos);
-                        DumpIntSet(newState);
-                        printf("\n");
-                        }
-                    }
-                }
             if(!newState.empty())
                 {
-                if(Debug)
-                    DumpIntSet(newState);
                 auto newStateNum = GetStateNum(newState, Debug);
-                if(Debug)
-                    printf(" is equal to state %d\n", newStateNum);
                 transitions.push_back(Transition{int(iState), iChar, newStateNum});
                 }
-
             }
         }
+#if 0
+    // now identify final states
+    final = vector<bool>(states.size(), false);
+    int iState = 0;
+    for(auto const& state: states)
+        {
+        if(std::find(state.begin(), state.end(), final) != state.end())
+            final[iState] = true;
+        ++iState;
+        }
+#endif
     }   
-void Machine::DumpDfa()
+void Machine::DumpDfa(FILE* output)
     {
-    printf("====DFA=====\n");
+    fprintf(output, "====DFA=====\n");
     int iState = 0;
     for(auto state: states)
         {
-        printf("%3d ", iState++);
-        printf(" {");
+        fprintf(output, "%3d ", iState++);
+        fprintf(output, " {");
         for(const auto& i:state)
             {
             if(&i != &(*state.begin())) // if not first iteration
-                printf(",");
-            printf("%d", i);
+                fprintf(output, ",");
+            fprintf(output, "%d", i);
             }
-        printf("}\n");
+        fprintf(output, "}\n");
         
         }
-    printf("====transitions=====\n");
+    fprintf(output, "====transitions=====\n");
     for(auto trans: transitions)
         {
-        printf("%3d %s %3d\n", trans.from, SymPrint(trans.on), trans.to);
+        fprintf(output, "%3d %s %3d\n", trans.from, SymPrint(trans.on), trans.to);
         }
     }
 
-void Machine::Dump()
+void Machine::Dump(FILE* output)
     {
-    printf("====Machine===\n");
-    printf("node followpos\n");
+    fprintf(output, "====Machine===\n");
+    fprintf(output, "node followpos\n");
     int iNode = 0;
     for(auto fp: followpos)
         {
-        printf("%4d ", iNode++);
-        printf("{");
+        fprintf(output, "%4d ", iNode++);
+        fprintf(output, "{");
         for(const auto& i:fp)
             {
             if(&i != &(*fp.begin())) // if not first iteration
-                printf(",");
-            printf("%d", i);
+                fprintf(output, ",");
+            fprintf(output, "%d", i);
             }
-        printf("}\n");
+        fprintf(output, "}\n");
         }
     }
+
 
 static const char* Template = R"x(
 
+#include <cassert>
+#include <cstdio>
+
 bool Lexin(const char* Input)
     {
-    bool result = false;
+    bool result = true;
     int  state  = 0;
-    int  ch     = *Input++
+    int  ch     = *Input++;
     for(auto ch = *Input++; ch; ch = *Input++)
         {
+$(TRANS)
         }
+NOMATCH:
+    return false;
     }
+
+int main()
+    {
+    const char* text = "aaabbbbbbbabb";
+    printf("match is %s\n", Lexin(text) ? "TRUE" : "FALSE");
+    }
+
 
 )x";
 
+
 void Machine::Generate(FILE* output)
     {
-    printf("switch(state){\n");
-    int iTrans = 0;
-    for(int iState = 0; iState < states.size(); ++iState)
+    const char* rover = Template;
+    while(*rover && !(rover[0] == '$' && rover[1] == '('))
+        fputc(*rover++, output);
+    if(!strncmp(rover, "$(TRANS)", 8))
         {
-        printf("    case %d: // state \n", iState);
-        assert(iTrans < transitions.size());
-        assert(transitions[iTrans].from == iState);
-        printf("        switch(
+        GenerateMachine(output);
+        rover += 8;
+        if(*rover == '\n')
+            ++rover;
         }
+    fprintf(output, "%s", rover);
+    }
+void Machine::GenerateMachine(FILE* output)
+    {
+    int indent = 8;
+    printf("%*sswitch(state){\n", indent, "");
+    indent += 4;
+    int iTrans = 0;
+    int nStates = int(states.size());
+    for(int iState = 0; iState < nStates; ++iState)
+        {
+        printf("%*scase %d: // state \n", indent, "", iState);
+        assert(iTrans < int(transitions.size()));
+        assert(transitions[iTrans].from == iState);
+        indent += 4;
+        printf("%*sswitch(ch){\n", indent, "");
+        indent += 4;
+        for(; transitions[iTrans].from == iState; ++iTrans)
+            {
+            Sym ch = transitions[iTrans].on;
+            if(ch >= ' ' && ch <= '~')
+                printf("%*scase '%c': state=%d; continue;\n", indent, "",
+                    ch, transitions[iTrans].to);
+            else
+                printf("%*scase 0x%02X: state=%d; continue;\n", indent, "",
+                    ch, transitions[iTrans].to);
+            }
+        printf("%*s}\n", indent, "");
+        indent -= 4;
+        printf("%*sgoto NOMATCH;\n", indent, "");
+        indent -= 4;
+        }
+    printf("%*sdefault: assert(false);\n", indent, "");
+    printf("%*s}\n", indent, "");
+    indent -= 4;
     }
 
 SyntaxNode::SyntaxNode(Sym symbol)
@@ -384,45 +418,64 @@ vector<Sym> SyntaxNode::positions;
 int SyntaxNode::nodeCount = 0;
 int SyntaxNode::termCount = 0;
 
-void SyntaxNode::Dump()
+void SyntaxNode::DumpSyntax(FILE* output)
     {
-    printf("%c", nullable ? '?' : ' ');
+    if(!isLeaf)
+        {
+        fprintf(output, "(");
+        left->DumpSyntax(output);
+        if(symbol == '|' || symbol == '.')
+            {
+            if(symbol == '|')
+                fprintf(output, "|");
+            right->DumpSyntax(output);
+            }
+        else if(symbol == '*')
+            fprintf(output, "*");
+        fprintf(output, ")");
+        }
+    else
+        fprintf(output, "%s", SymPrint(symbol));
+    }
+void SyntaxNode::Dump(FILE* output)
+    {
+    fprintf(output, "%c", nullable ? '?' : ' ');
     if(isLeaf)
-        printf("%3d", position);
+        fprintf(output, "%3d", position);
     else
-        printf("   ");
-    printf("[%3d] %s", nodeNum, SymPrint(symbol));
+        fprintf(output, "   ");
+    fprintf(output, "[%3d] %s", nodeNum, SymPrint(symbol));
     if(left)
-        printf(" %3d", left->nodeNum);
+        fprintf(output, " %3d", left->nodeNum);
     else
-        printf("   -");
+        fprintf(output, "   -");
     if(right)
-        printf(" %3d", right->nodeNum);
+        fprintf(output, " %3d", right->nodeNum);
     else
-        printf("   -");
+        fprintf(output, "   -");
     // firstpos
-    printf(" {");
+    fprintf(output, " {");
     for(const auto& i:firstpos)
         {
         if(&i != &(*firstpos.begin())) // if not first iteration
-            printf(",");
-        printf("%d", i);
+            fprintf(output, ",");
+        fprintf(output, "%d", i);
         }
-    printf("}");
+    fprintf(output, "}");
     // lastpos
-    printf(" {");
+    fprintf(output, " {");
     for(const auto& i:lastpos)
         {
         if(&i != &(*lastpos.begin())) // if not first iteration
-            printf(",");
-        printf("%d", i);
+            fprintf(output, ",");
+        fprintf(output, "%d", i);
         }
-    printf("}");
-    printf("\n");
+    fprintf(output, "}");
+    fprintf(output, "\n");
     if(left)
-        left->Dump();
+        left->Dump(output);
     if(right)
-        right->Dump();
+        right->Dump(output);
     }
 
 
@@ -430,7 +483,7 @@ void SyntaxNode::Dump()
 class Parser
     {
 public:
-    Parser(FILE* input) : input(input), peeked(false) {}
+    Parser(FILE* input) : input(input) {}
     SyntaxNode* Parse();
 
 private:
@@ -438,37 +491,23 @@ private:
     SyntaxNode* ParseC();
     SyntaxNode* ParseU();
     SyntaxNode* ParseT();
-    Sym     PeekSym();
     Sym     NextSym();
     bool    Accept(Sym symbol);
     void    Expect(Sym symbol);
 
+    bool    quoteMode = false;
     FILE*   input;
-    bool    peeked;
-    Sym     peekSym;
     Sym     currentSym;
     };
 
 
-Sym Parser::PeekSym()
-    {
-    Sym result = peekSym;
-    if(!peeked)
-        result = peekSym = fgetc(input);
-    return result;
-    }
-
 Sym Parser::NextSym()
     {
-    if(peeked)
-        {
-        currentSym  = peekSym;
-        peeked      = false;
-        }
-    else // ??? EOF???
-        currentSym = fgetc(input);
+    auto ch = fgetc(input);
+    if(ch == EOF)
+        ch = SENTINEL;
 
-    return currentSym;
+    return currentSym = ch;
     }
 bool Parser::Accept(Sym symbol)
     {
@@ -497,7 +536,7 @@ E-> '(' E ')'
 
 make palatable to recursive descent, add op prec, etc:
 
-start->E ('\n'|'\0')
+start->E #
 
 E-> C '|' E
   | C
@@ -521,7 +560,7 @@ SyntaxNode* Parser::Parse()
     fprintf(stderr, "Parse() RETURNS\n");
     if(currentSym == SENTINEL)
         {
-//        result = new SyntaxNode('.', result, new SyntaxNode(256));
+        result = new SyntaxNode('.', result, new SyntaxNode(SENTINEL));
         }
     else
         Fail("Missing end of line.\n");
@@ -548,18 +587,20 @@ SyntaxNode* Parser::ParseE()
 SyntaxNode* Parser::ParseC()
     {
     SyntaxNode* result = ParseU();
-    switch(currentSym)
-        {
-        case '*' :
-        case '|' :
-        case ')' :
-        case SENTINEL :
-            break;
-        default:
-            auto left = result;
-            auto right = ParseC();
-            result = new SyntaxNode('.', left, right);
-        }
+    for(bool done=false; !done;)
+        switch(currentSym)
+            {
+            case '*' :
+            case '|' :
+            case ')' :
+            case SENTINEL :
+                done    = true;
+                break;
+            default:
+                auto left = result;
+                auto right = ParseC();
+                result = new SyntaxNode('.', left, right);
+            }
     return result;
     }
 SyntaxNode* Parser::ParseU()
@@ -581,7 +622,6 @@ SyntaxNode* Parser::ParseT()
         {
         Accept('(');
         result  = ParseE();
-        fprintf(stderr, "ParseT() expect right paren\n");
         Expect(')');
         }
     else
@@ -598,12 +638,13 @@ int main(int argCount, char** args)
     {
     auto parser = make_unique<Parser>(stdin);
     auto tree = parser->Parse();
-    printf("====DUMP SYNTAX TREE====\n");
-    printf("?=nullable, position, nodenum, sym, left, right, {firstpos} {lastpos}\n");
-    tree->Dump();
+    fprintf(stderr, "====DUMP SYNTAX TREE====\n");
+    tree->DumpSyntax(stderr);
+    fprintf(stderr, "\n?=nullable, position [nodenum] 'sym' left, right, {firstpos} {lastpos}\n");
+    tree->Dump(stderr);
     Machine::CalculateFollowPos(tree);
-    Machine::Dump();
+    Machine::Dump(stderr);
     Machine::CreateDfa(tree);
-    Machine::DumpDfa();
+    Machine::DumpDfa(stderr);
     Machine::Generate(stdout);
     }
