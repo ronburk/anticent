@@ -1,0 +1,50 @@
+// hparse.lxn - code to parse HTTP request
+
+SP            " "
+HT            \t
+CR            \r
+LF            \n
+CRLF          {CR}{LF}
+LWS           {CRLF}?
+DIGIT         [0-9]
+CTL           [^\0-\31\127]
+TEXT          LWS|[^{CTL}]
+HEX           [A-Fa-f{DIGIT}]
+
+separators    [()<>@,;:\\"/[\]?=\{} \t]
+token         [^{CTL}{separators}]+
+
+%%
+
+all
+    : request-line SP request-target SP HTTP-version CRLF
+    ;
+
+request-line
+    : method SP request-target SP HTTP-version CRLF
+
+method
+    : token
+    ;
+
+request-target
+    : origin-form
+    | absolute-form
+    | authority-form
+    ;
+
+origin-form
+    : absolute-path ( "?" query )?
+    ;
+
+absolute-path
+    : ( "/" segment )+
+    ;
+
+segment
+    : 
+
+
+HTTP-version
+    : "HTTP/" vernum "." vernum
+    ;

@@ -294,28 +294,29 @@ void Machine::GenerateMachine(FILE* output)
     int iTrans = 0;
     int nStates = int(states.size());
     for(int iState = 0; iState < nStates; ++iState)
-        {
-        printf("%*scase %d: // state \n", indent, "", iState);
-        assert(iTrans < int(transitions.size()));
-        assert(transitions[iTrans].from == iState);
-        indent += 4;
-        printf("%*sswitch(ch){\n", indent, "");
-        indent += 4;
-        for(; transitions[iTrans].from == iState; ++iTrans)
+        if(iTrans < int(transitions.size()) && transitions[iTrans].from == iState)
             {
-            Sym ch = transitions[iTrans].on;
-            if(ch >= ' ' && ch <= '~')
-                printf("%*scase '%c': state=%d; continue;\n", indent, "",
-                    ch, transitions[iTrans].to);
-            else
-                printf("%*scase 0x%02X: state=%d; continue;\n", indent, "",
-                    ch, transitions[iTrans].to);
+            printf("%*scase %d: // state \n", indent, "", iState);
+            assert(iTrans < int(transitions.size()));
+            assert(transitions[iTrans].from == iState);
+            indent += 4;
+            printf("%*sswitch(ch){\n", indent, "");
+            indent += 4;
+            for(; transitions[iTrans].from == iState; ++iTrans)
+                {
+                Sym ch = transitions[iTrans].on;
+                if(ch >= ' ' && ch <= '~')
+                    printf("%*scase '%c': state=%d; continue;\n", indent, "",
+                        ch, transitions[iTrans].to);
+                else
+                    printf("%*scase 0x%02X: state=%d; continue;\n", indent, "",
+                        ch, transitions[iTrans].to);
+                }
+            printf("%*s}\n", indent, "");
+            indent -= 4;
+            printf("%*sgoto NOMATCH;\n", indent, "");
+            indent -= 4;
             }
-        printf("%*s}\n", indent, "");
-        indent -= 4;
-        printf("%*sgoto NOMATCH;\n", indent, "");
-        indent -= 4;
-        }
     printf("%*sdefault: assert(false);\n", indent, "");
     printf("%*s}\n", indent, "");
     indent -= 4;
@@ -590,7 +591,7 @@ SyntaxNode* Parser::ParseC()
     for(bool done=false; !done;)
         switch(currentSym)
             {
-            case '*' :
+            case '*' : assert(false);
             case '|' :
             case ')' :
             case SENTINEL :
@@ -598,7 +599,7 @@ SyntaxNode* Parser::ParseC()
                 break;
             default:
                 auto left = result;
-                auto right = ParseC();
+                auto right = ParseU();
                 result = new SyntaxNode('.', left, right);
             }
     return result;

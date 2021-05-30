@@ -1,0 +1,54 @@
+diff --git a/BUILD.gn b/BUILD.gn
+index e7a759f9cc..71d7d5b140 100644
+--- a/BUILD.gn
++++ b/BUILD.gn
+@@ -3890,6 +3890,7 @@ if (current_toolchain == v8_snapshot_toolchain) {
+   }
+ }
+ 
++
+ v8_executable("torque-language-server") {
+   visibility = [ ":*" ]  # Only targets in this file can depend on this.
+ 
+@@ -3981,6 +3982,7 @@ group("gn_all") {
+   testonly = true
+ 
+   deps = [
++    ":anticent",
+     ":d8",
+     ":v8_fuzzers",
+     ":v8_hello_world",
+@@ -3999,6 +4001,33 @@ group("gn_all") {
+   }
+ }
+ 
++# our local GN stuff
++#
++
++v8_executable("anticent") {
++  sources = [
++    "../src/anticent/anticent.cc",
++    "../src/anticent/v8main.cc",
++    "../src/anticent/process.cc",
++    "../src/anticent/db.cc",
++    "../src/anticent/sqlite3.c",
++  ]
++
++  configs = [
++    # Note: don't use :internal_config here because this target will get
++    # the :external_config applied to it by virtue of depending on :v8, and
++    # you can't have both applied to the same target.
++    ":internal_config_base",
++  ]
++
++  deps = [
++    ":v8",
++    ":v8_libbase",
++    ":v8_libplatform",
++    "//build/win:default_exe_manifest",
++  ]
++}
++
+ group("v8_python_base") {
+   data = [
+     ".vpython",

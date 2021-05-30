@@ -1,0 +1,78 @@
+class
+    HttpConn
+
+ECONNIO        // EPOLLIN|EPOLLOUT
+EREADCLOSED    // the read side is shut down.
+ECLOSEWRITE    // the write side is shut down.
+EFINALREQUEST  // request completes and request queue is empty
+EHUP           // HUP
+EERR           // EPOLLERR
+
+CLOSE { // named action
+    
+    }
+
+CONNSTART:      // initial state
+    ECONNIO->CONNIO
+    EREADCLOSED->CONNCLOSED
+    EHUP->CONNDEAD
+        Close();
+        
+CONNIO:         // two-way I/O is possible
+    
+CONNWRITEONLY:  // RD is closed, still sending response(s)
+CONNREADONLY:   // FIN sent, reading/dumping input
+CONNCLOSED:     // ready to close socket
+CONNDEAD:       // connection is ready to die
+
+class
+    HttpReader
+        SetPriority(Job::LOW)
+        Block();
+INIT:
+    EPOLLIN->READABLE
+        Ready();
+    EPOLLHUP->CLOSED
+READABLE:
+
+
+class HttpWriter
+
+EPOLLOUT        // epoll_wait returned EPOLLOUT flag for this fd
+DATAHERE        // data arrives for output
+WRITEBLOCKED    // write() operation got blocked before completing
+WRITECOMPLETE   // finished emptying write buffer
+EREADCLOSED->   // default for EREADCLOSED is ignore it
+
+INIT:
+    
+    EPOLLOUT->WRITEABLE
+    DATAHERE->WAITINGTOWRITE
+WRITEABLE:
+    DATAHERE->
+WAITINGTOWRITE: // have data, but socket not writable
+    EPOLLOUT->WAITINGTORUN
+        Ready();
+WAITINGTORUN: // have data, socket writable
+    DATAHERE->.
+    WRITEBLOCKED->WAITINGTOWRITE
+        Block();
+    WRITECOMPLETE->WRITEABLE
+        Block();
+
+/*
+
+static unsigned char HttpWriter_opcodes[] = {...};
+static unsigned short HttpWriter_states[] = {...};
+
+void HttpWriter::NextState(int event)
+    {
+    int action = Action(HttpWriter_opcodes, event);
+    switch(action)
+        {
+        }
+    }
+
+ */
+
+    

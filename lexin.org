@@ -1,0 +1,126 @@
+* Overview
+
+lexin reads a specification file and generates the C++ source code for
+one or more functions that use regular expressions to parse strings.
+Its target application:
+    a) is extracting information from strings.
+    b) knows the patterns it must match at compile time.
+    c) is complex enough that using regular expressions becomes an unreadable mess.
+    d) desires more granula error detection than monolithic regular expressions
+       can provide.
+
+It differs from more common approaches by allowing the user to break
+their regular expressions up into grammars. This syntax is much easier to
+implement correctly, read, and understand than putting all that complexity
+into some flavor of regular expression syntax.
+
+** regular expressions and grammars
+
+x
+N1 : 'x'
+   ;
+xy
+N1 : 'x' 'y'
+   ;
+x|y
+N1 : 'x' | 'y'
+   ;
+
+x*
+N1: x N1
+  | 
+  ;
+
+
+
+** An Incremental Example
+Suppose we wish to scan text for a telephone number. Here is a simple lexin
+specification for that task:
+
+// example1.xin - find telephone numbers
+%%
+phnumber
+    : "(" areacode ")" prefix "-" number
+        {
+        printf("Found phone number: (%.*s) %.*s-%.*s\n",
+            $areacode.len, $areacode,
+            $prefix.len, $prefix,
+            $number.len, $number);
+        }
+    ;
+areacode : '[0-9]{3}' ;
+
+prefix   : '[0-9]{3}' ;
+number   : '[0-9]{4}' ;
+
+Here we see the lexin syntax, which looks like an amalgam of the traditional
+compiler tools lex and yacc. Although it looks like a standard BNF syntax of
+grammar is accepted, lexin only generates simple state machines and will complain
+if asked to parse anything more complicated than a regular grammar.
+
+The quoted constants in this example are regular expressions. As with lex,
+double quotes are used to enclose literal strings (which are also still regular
+expressions). So '[0-9]' is a regular expression matching any ASCII digit, while
+"[0-9]" is a regular expression matching the unlikely 5-character sequence:
+"[0-9]".
+
+
+
+* Design
+
+** syntax
+The overall file syntax goes like this:
+    definitions
+    %%
+    grammar
+*** definitions
+The initial section of the lexin file is for creating names for
+regular definitions that will be used later. This is never strictly
+necessary, but is often convenient in line with the goal of making
+the use of regular expressions readable and understandable.
+
+
+
+** Typical Problems
+*** custom scan fragment
+
+*** matching "words"
+
+
+*** nested parens
+This is, of course, beyond the ability of a regular expression,
+which "cannot count."
+
+*** C-style comments
+The first thought is something like:
+    "/*".*"*/"
+But because of the longest-match convention, that matches, e.g., this:
+    /* comment1 */ /* but I will match until LAST closer */
+If we had intersect and negate operators:
+    "/*"(.*&!.*"*/")"*/"
+But look how unreadable that begins to get already. What if "/" is
+the "up to" operator and works on the next regdef:
+
+c_comment
+    : "/*" / "*/"
+        { $$ = $2; } // return the content of the comment
+
+*** XML tags
+
+Similar to the C comment problem, the first thought might be:
+    <.*>
+and the problem is that this will match this entire string:
+    <start1> and some stuff <start2>
+So the solution is similar:
+    '<' / '>'
+
+*** Quoted String with embedded quotes
+Several styles of quoted string we might like to handle.
+a) what is the quote character?
+b) can you embed literal quote character by doubling it?
+c) can you embed literal quote character with an escape character?
+d) do we handle "heredoc" syntaxes?
+e) do we offer to create "compiled" string with escape sequences
+   resolved?
+f) 
+
