@@ -56,7 +56,8 @@ number   : '[0-9]{4}' ;
 Here we see the lexin syntax, which looks like an amalgam of the traditional
 compiler tools lex and yacc. Although it looks like a standard BNF syntax of
 grammar is accepted, lexin only generates simple state machines and will complain
-if asked to parse anything more complicated than a regular grammar.
+if asked to parse anything more complicated than a regular grammar
+(i.e., a grammar that is equivalent to some regular expression).
 
 The quoted constants in this example are regular expressions. As with lex,
 double quotes are used to enclose literal strings (which are also still regular
@@ -68,11 +69,37 @@ expressions). So '[0-9]' is a regular expression matching any ASCII digit, while
 
 * Design
 
+** Overview
+
+Sub-expressions are hard to write, understand, and implement. Lexin's
+approach is to instead treat sub-expressions as separate expressions,
+in which the familiar "longest match" behavior can be assumed.
+
+Consider Stack Overflow question:
+ https://stackoverflow.com/questions/42094483/regex-sub-expressions
+
+That begins to be fairly hard to understand and get right. The
+more verbose (and easier to read and verify) lexin solution might be:
+
+argchr
+    : [^:]
+    | "\\:"
+    ;
+arg : argchr* ;
+repl
+    : "replace:" arg ":" arg
+        PRINT($2, $4);
+    ;
+
+Note that this is NOT the same as:
+    "replace:([^:]|\\:)*:([^:]|\\:)*"
+
 ** syntax
 The overall file syntax goes like this:
     definitions
     %%
     grammar
+
 *** definitions
 The initial section of the lexin file is for creating names for
 regular definitions that will be used later. This is never strictly
@@ -80,11 +107,16 @@ necessary, but is often convenient in line with the goal of making
 the use of regular expressions readable and understandable.
 
 
+*** grammar
+The grammar section consists of two types of entities: 
+
 
 ** Typical Problems
 *** custom scan fragment
 
 *** matching "words"
+Regular expression software often offers an operator like "\w" to
+match something like "[0-9a-zA-Z_]"
 
 
 *** nested parens
@@ -102,8 +134,13 @@ But look how unreadable that begins to get already. What if "/" is
 the "up to" operator and works on the next regdef:
 
 c_comment
-    : "/*" / "*/"
+    : "/*" ~ "*/"
         { $$ = $2; } // return the content of the comment
+
+This means a) first maximally match "/*" then b) mark pos and do
+unanchored search for "*/" then c) back up to start of located pattern
+and deliver pos thru curpos as result of "/" then deliver remainder
+as match for "*/".
 
 *** XML tags
 
@@ -112,7 +149,46 @@ Similar to the C comment problem, the first thought might be:
 and the problem is that this will match this entire string:
     <start1> and some stuff <start2>
 So the solution is similar:
-    '<' / '>'
+    '<' ~ '>'
+
+Now, can we do this:
+
+tag: stag | etag ;
+stag
+    : "<" ~ ">"
+    ;
+etag
+    : "<" ~ "/>"
+    ;
+
+What does the parse DFA for this look like? Maybe this:
+    // 0 = start state
+    0 : "<" -> 1
+    // 1 = unanchored scan for ">" or "/>"
+    1 : "[^/>]" -> 1
+      : "/"     -> 2
+      : ">"     -> 4
+    // 2 = got "/", check for ">"
+    2 : ">"     -> 3
+      : "/"     -> 2
+      : .       -> 1
+    // 3 = got "/>"
+    3 :
+    // 4 = got ">"
+    4 :
+
+Consider this nasty thing:
+
+tag: stag | etag ;
+stag
+    : "<" ~ "[^>]*>"
+    ;
+etag
+    : "<" ~ "[^>]*/>"
+    ;
+
+In this case, the "~" operator is superfluous and will always return a
+zero-length string if the entire rule matches.
 
 *** Quoted String with embedded quotes
 Several styles of quoted string we might like to handle.
