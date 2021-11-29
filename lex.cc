@@ -23,6 +23,9 @@ void Fail(const char* format, ...)
     }
 
 
+/* any 8-bit value could be a literal regular expression character,
+ * so we define a wider type that can also store meta-characters.
+ */
 enum
     {
     EPSILON     = 256,
@@ -485,7 +488,8 @@ class Parser
     {
 public:
     Parser(FILE* input) : input(input) {}
-    SyntaxNode* Parse();
+    void        Parse();
+    SyntaxNode* ParseRegex();
 
 private:
     SyntaxNode* ParseE();
@@ -501,6 +505,11 @@ private:
     Sym     currentSym;
     };
 
+
+void Parser::Parse()
+    {
+    
+    }
 
 Sym Parser::NextSym()
     {
@@ -554,11 +563,11 @@ T-> '(' E ')'
 
  */
 
-SyntaxNode* Parser::Parse()
+SyntaxNode* Parser::ParseRegex()
     {
     NextSym();
     auto result = ParseE();
-    fprintf(stderr, "Parse() RETURNS\n");
+    fprintf(stderr, "ParseRegex() RETURNS\n");
     if(currentSym == SENTINEL)
         {
         result = new SyntaxNode('.', result, new SyntaxNode(SENTINEL));
@@ -635,10 +644,29 @@ SyntaxNode* Parser::ParseT()
     return result;
     }
 
+std::vector<char> ReadFile(FILE* input)
+    {
+    std::vector<char> buffer;
+
+    int c;
+
+    c = fgetc(input);
+    while((c=fgetc(input)) != EOF)
+        buffer.push_back((char)c);
+    buffer.push_back('\0');
+    return buffer;
+    }
+
 int main(int argCount, char** args)
     {
     auto parser = make_unique<Parser>(stdin);
-    auto tree = parser->Parse();
+
+    std::vector<char> Source = ReadFile(stdin);
+    fprintf(stderr, "Input file was '%s'\n", Source.data());
+
+    parser->Parse();
+#if 0
+    auto tree = parser->ParseRegex();
     fprintf(stderr, "====DUMP SYNTAX TREE====\n");
     tree->DumpSyntax(stderr);
     fprintf(stderr, "\n?=nullable, position [nodenum] 'sym' left, right, {firstpos} {lastpos}\n");
@@ -648,4 +676,5 @@ int main(int argCount, char** args)
     Machine::CreateDfa(tree);
     Machine::DumpDfa(stderr);
     Machine::Generate(stdout);
+#endif
     }

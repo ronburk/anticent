@@ -14,6 +14,79 @@ their regular expressions up into grammars. This syntax is much easier to
 implement correctly, read, and understand than putting all that complexity
 into some flavor of regular expression syntax.
 
+** default actions vis a vis lex
+The lex default action "consists of copying the input to the output."
+[http://dinosaur.compilertools.net/lex/index.html]
+Keep in mind that we are producing a simple regular grammar parser not
+just a lexical analyzer, and we expect to have been passed the entire
+input as a string.
+
+Because lexin is an integrated parser/lexer, we don't need the
+flexibility/complexity of associating actions with each regular expression.
+Almost. That still leaves the common need to easily let the parser
+ignore tokens globally or within some context. This invariably is
+the specific need to ignore or not ignore some form of white space.
+
+We also would rather not have to have actions for both the lexer
+and the parser.
+
+Suppose we have this definition:
+
+WHITESPACE   [ \t\r\n\v\f]
+
+Then how do we specify that the parser should ignore WHITESPACE,
+either globally or within some production? If there is a syntax for
+ignoring within some production, then the two cases are the same --
+just signal what you want to ignore in the top-most production
+to be "global." Something like:
+
+all
+    : request-line SP request-target SP HTTP-version CRLF
+    ! WHITESPACE
+    ;
+
+How is this implemented? Suppose each regex has an associated
+token ID, in the customary manner. Maintain an array of integers,
+one for each token ID, intialized to zero. When we enter the
+state for "all", we increment:
+    ++IgnoreTokens[WHITESPACE_ID];
+When we exit (conceptually, at least) the state for "all", we decrement:
+    --IgnoreTokens[WHITESPACE_ID];
+
+During the parse, when we get an unexpected token, if the corresponding
+entry in IgnoreTokens is greater than zero, we fetch a new token and
+return to the same parser state.
+
+When generating DFA code for the parser, each state corresponding
+to a production must start by pushing the current input position
+onto the (fixed-size) position stack. When generating code for
+the final state of a production, the code will note the total length,
+adjust the stack pointer down, then invoke any user action.
+
+** the parser DFA
+
+We conceptually want control to "enter" a non-terminal when
+it starts and "exit" it when it matches or fails to match.
+A regular grammar parser needs no stack, but we do because
+we want to "remember" the start position of the substring
+that the production matches. However, we can calculate at
+compile-time the maximum stack needed because a regular grammar
+allows no recursion.
+
+Note that we don't allow you to attach an action to sub-productions.
+Consider this:
+
+statement-list
+    : ( "$" statement "." ) *
+    ;
+
+
+** actions
+
+
+
+
+
 ** regular expressions and grammars
 
 x
